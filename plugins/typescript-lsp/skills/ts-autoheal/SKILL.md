@@ -1,26 +1,26 @@
 ---
 name: ts-autoheal
-description: Auto-heal TypeScript and JavaScript after edits. Use when editing, refactoring, or reviewing .ts/.tsx/.js/.jsx/.mts/.cts files, when type or lint errors appear, or when asked to fix, clean up, or type-check TS/JS.
+description: Auto-heal TypeScript and JavaScript after edits. Use when editing, refactoring, or reviewing .ts/.tsx/.js/.jsx/.mts/.cts files, when type or lint errors show up, or when asked to fix, clean up, or type-check TS/JS.
 ---
 
-# TypeScript / JavaScript auto-heal workflow
+# TypeScript / JavaScript auto-heal
 
-A TypeScript/JavaScript language server is available. It is READ-ONLY: it provides goToDefinition, goToImplementation, findReferences, hover, documentSymbol, workspaceSymbol, and call hierarchy, plus type and lint diagnostics that are pushed into context automatically after each edit. The language server CANNOT apply quick fixes, rename symbols, organize imports, or format. Every remediation is done with the command-line tools below.
+You have a TypeScript/JavaScript language server, and it's read-only. It can look things up — goToDefinition, goToImplementation, findReferences, hover, documentSymbol, workspaceSymbol, and call hierarchy — and it pushes type and lint errors into your context right after each edit. What it can't do is change code: no quick fixes, no rename, no organize-imports, no formatting. You do the fixing with the command-line tools below.
 
-## Before editing
+## Before you edit
 
-- Resolve a symbol with goToDefinition or documentSymbol instead of guessing its shape.
-- Before changing any exported signature, type, or interface, run findReferences (and incomingCalls for functions) to enumerate every call site that must change.
+- Look a symbol up with goToDefinition or documentSymbol instead of guessing its shape.
+- Before you touch an exported signature, type, or interface, run findReferences (and incomingCalls for functions) so you know every call site that has to change.
 
-## After editing — remediate, do not just report
+## After you edit, fix it — don't just report it
 
-Work on the changed files and repeat until clean:
+Work through the changed files and repeat until they're clean:
 
-- Run `eslint --fix` on the changed files to auto-fix lint issues and, where an import-order rule is configured, organize imports. A PostToolUse hook already attempts this automatically and reports what it could not fix.
-- Run `tsc --noEmit -p tsconfig.json` for the authoritative, whole-project type check. Pushed diagnostics cover only opened or affected files and can be stale, so treat `tsc` as the source of truth.
-- For each remaining `tsc` error, use goToDefinition and hover on the involved types to trace the mismatch to its origin, fix it there, and re-run `tsc`.
-- Ignore pushed diagnostics that `tsc --noEmit` does not reproduce; they are stale.
+- Run `eslint --fix` on them to clear lint and, where an import-order rule is set up, organize imports. A PostToolUse hook already tries this for you and hands back whatever it couldn't fix.
+- Run `tsc --noEmit -p tsconfig.json` for the real, whole-project type check. The pushed diagnostics only cover open or affected files and can lag behind, so trust `tsc` when they disagree.
+- For each `tsc` error that's left, follow the types with goToDefinition and hover back to where the mismatch starts, fix it there, and run `tsc` again.
+- If a pushed diagnostic doesn't show up in `tsc --noEmit`, it's stale. Ignore it.
 
-## Done criteria
+## You're done when
 
-`tsc --noEmit` exits cleanly and `eslint` reports no remaining errors on the changed files. A Stop hook enforces the project type-check before the turn can end.
+`tsc --noEmit` comes back clean and `eslint` has nothing left to report on the changed files. A Stop hook runs the project type-check before the turn can end, so this isn't optional.

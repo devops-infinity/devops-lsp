@@ -1,6 +1,6 @@
 # devops-lsp
 
-A small marketplace of Claude Code language-server plugins, kept under the DevOps brand. Add it once and Claude Code gets real TypeScript and JavaScript intelligence — plus an auto-heal layer — in every repo you open, whether that's a NestJS API, a Next.js app, or any other TS/JS project.
+A small marketplace of Claude Code language-server plugins, kept under the DevOps brand. Add it once and Claude Code gets real TypeScript and JavaScript intelligence, plus an auto-heal layer, in every repo you open — a NestJS API, a Next.js app, or anything else built on TS/JS.
 
 The first plugin is `typescript-lsp`. It does two things:
 

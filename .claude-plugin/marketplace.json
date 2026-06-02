@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "devops-lsp",
+  "owner": {
+    "name": "DevOps",
+    "email": "sazzad@devops.bd"
+  },
+  "description": "A DevOps marketplace of Claude Code language-server plugins. Add it once and use the same TypeScript and JavaScript support in every project.",
+  "plugins": [
+    {
+      "name": "typescript-lsp",
+      "source": "./plugins/typescript-lsp",
+      "description": "TypeScript and JavaScript code intelligence, plus auto-heal: eslint --fix after edits and a tsc --noEmit gate before a turn can end.",
+      "version": "1.0.0",
+      "author": {
+        "name": "DevOps",
+        "email": "sazzad@devops.bd"
+      },
+      "category": "development"
+    }
+  ]
+}

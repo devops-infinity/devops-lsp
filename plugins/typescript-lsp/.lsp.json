@@ -1,0 +1,43 @@
+{
+  "typescript": {
+    "command": "typescript-language-server",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".ts": "typescript",
+      ".tsx": "typescriptreact",
+      ".mts": "typescript",
+      ".cts": "typescript",
+      ".js": "javascript",
+      ".jsx": "javascriptreact",
+      ".mjs": "javascript",
+      ".cjs": "javascript"
+    },
+    "startupTimeout": 30000,
+    "maxRestarts": 3,
+    "initializationOptions": {
+      "maxTsServerMemory": 8192,
+      "preferences": {
+        "importModuleSpecifierPreference": "shortest",
+        "includeCompletionsForModuleExports": true,
+        "allowRenameOfImportPath": true
+      },
+      "tsserver": {
+        "useSyntaxServer": "auto",
+        "logVerbosity": "off"
+      }
+    },
+    "settings": {
+      "diagnostics": {
+        "ignoredCodes": [],
+        "eagerClear": false
+      },
+      "typescript": {
+        "tsserver": { "maxTsServerMemory": 8192 },
+        "preferences": { "importModuleSpecifierPreference": "shortest" }
+      },
+      "javascript": {
+        "tsserver": { "maxTsServerMemory": 8192 }
+      }
+    }
+  }
+}

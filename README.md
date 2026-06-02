@@ -33,21 +33,23 @@ If a tool from the first two groups is missing, install it before you rely on th
 
 ## Install
 
-Register the marketplace, then install the plugin:
+Install the language server first (the "What you need installed" section above covers it), then add the marketplace and install the plugin. Both commands run at user scope by default, which is global: the plugin auto-loads in every project you open, so you set this up once per machine.
 
 ```sh
 claude plugin marketplace add https://github.com/devops-infinity/devops-lsp
 claude plugin install typescript-lsp@devops-lsp
 ```
 
-Restart Claude Code so the language server attaches, then confirm it loaded:
+Restart Claude Code so the language server attaches, then confirm it loaded globally:
 
 ```sh
+claude plugin list
 claude plugin details typescript-lsp@devops-lsp
-claude --debug   # look for: Total LSP servers loaded: 1
 ```
 
-If the LSP tool doesn't appear, set `ENABLE_LSP_TOOL=1` in your environment or `settings.json` and restart. Some Claude Code builds still need that flag even though it's meant to be on by default.
+`claude plugin list` should show `typescript-lsp@devops-lsp` at `Scope: user`, enabled. `details` should report one LSP server, one skill, and two hooks. Keep the default scope — don't pass `--scope project` unless you want the plugin limited to a single repo, since it's built to be global.
+
+If the LSP tool doesn't show up, set `ENABLE_LSP_TOOL=1` in your environment or `settings.json` and restart; some Claude Code builds need that flag even though it's meant to be on by default. To see what loaded, run `claude --debug` and look for the line reporting how many LSP servers loaded.
 
 ## What Claude gets from it
 

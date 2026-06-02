@@ -22,6 +22,5 @@
     "diagnostics",
     "code-intelligence"
   ],
-  "lspServers": "./.lsp.json",
-  "hooks": "./hooks/hooks.json"
+  "lspServers": "./.lsp.json"
 }

@@ -5,7 +5,7 @@
     "name": "DevOps",
     "email": "sazzad@devops.bd"
   },
-  "description": "A DevOps marketplace of Claude Code language-server plugins. Add it once and use the same TypeScript, JavaScript, and Rust support in every project.",
+  "description": "A DevOps marketplace of Claude Code language-server plugins. Add it once and use the same TypeScript, JavaScript, Rust, and Python support in every project.",
   "plugins": [
     {
       "name": "typescript-lsp",
@@ -22,6 +22,17 @@
       "name": "rust-lsp",
       "source": "./plugins/rust-lsp",
       "description": "Rust code intelligence, plus auto-heal: rustfmt after edits and a cargo clippy gate before a turn can end.",
+      "version": "1.0.0",
+      "author": {
+        "name": "DevOps",
+        "email": "sazzad@devops.bd"
+      },
+      "category": "development"
+    },
+    {
+      "name": "python-lsp",
+      "source": "./plugins/python-lsp",
+      "description": "Python code intelligence, plus auto-heal: ruff check --fix and ruff format after edits and a basedpyright gate before a turn can end.",
       "version": "1.0.0",
       "author": {
         "name": "DevOps",

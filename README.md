@@ -1,23 +1,24 @@
 # devops-lsp
 
-A small marketplace of Claude Code language-server plugins, kept under the DevOps brand. Add it once and Claude Code gets real code intelligence, plus an auto-heal layer, in every repo you open — a NestJS API, a Next.js app, a Cargo workspace, or anything else built on TS/JS or Rust.
+A small marketplace of Claude Code language-server plugins, kept under the DevOps brand. Add it once and Claude Code gets real code intelligence, plus an auto-heal layer, in every repo you open — a NestJS API, a Next.js app, a Cargo workspace, a Python service, or anything else built on TS/JS, Rust, or Python.
 
-Both plugins follow the same shape. Each one wires up a language server so Claude resolves definitions, references, hovers, symbols, and call hierarchy from the type system instead of guessing from text. Each one adds an auto-heal layer: a fast formatter or fixer after every edit, and a whole-project check that won't let a turn end while errors remain. Each one bundles a skill that teaches Claude how to use the two together.
+All three plugins follow the same shape. Each one wires up a language server so Claude resolves definitions, references, hovers, symbols, and call hierarchy from the type system instead of guessing from text. Each one adds an auto-heal layer: a fast formatter or fixer after every edit, and a whole-project check that won't let a turn end while errors remain. Each one bundles a skill that teaches Claude how to use the two together.
 
 - `typescript-lsp` — `typescript-language-server`, with `eslint --fix` after edits and a `tsc --noEmit` gate.
 - `rust-lsp` — `rust-analyzer`, with `rustfmt` after edits and a `cargo clippy` gate.
+- `python-lsp` — `basedpyright`, with `ruff check --fix` and `ruff format` after edits and a `basedpyright` gate.
 
 ## What you need installed
 
-This plugin tells Claude Code how to reach a language server and which checks to run. It doesn't ship those tools, so they need to be on your PATH. Here is the full list and how to get each one.
+These plugins tell Claude Code how to reach a language server and which checks to run. They don't ship those tools, so they need to be on your PATH. Here is the full list and how to get each one.
 
-For the language server:
+### For typescript-lsp
 
 - `typescript-language-server` and `typescript`. Install them globally with Bun:
   ```sh
   bun add -g typescript-language-server@5.3.0 typescript@6.0.3
   ```
-  Versions are pinned to the latest stable as of June 3rd 2026; bump them when newer releases ship.
+  Both are the newest usable releases as of August 2nd 2026, but do not blindly bump `typescript` to 8 or to the 7.x line. TypeScript 7 is the native rewrite and it **removed `tsserver`**, which is the program `typescript-language-server` drives — its npm `bin` now contains `tsc` alone. Installing it silently leaves you with no language server. The native replacement ships as `@typescript/native-preview` and is still a dev build, so there is nothing stable to move to yet. Stay on the 6.x line (6.0.3 is the newest 6.x) until `typescript-language-server` ships support for the native server, or until this plugin is repointed at it. `typescript-language-server` itself is safe to bump; 5.3.0 is current.
 
 For the auto-heal hooks:
 
@@ -49,6 +50,22 @@ Nothing is needed per project. Cargo already knows how to build the workspace, s
 
 Take the staleness anyway. A proc-macro server that doesn't match the compiler doesn't fail loudly — it keeps running and reports macro-generated symbols as unresolved. Claude reads that as broken code and "fixes" things that were never wrong. Matching the toolchain matters more than the fixes, especially in any repo with a `rust-toolchain.toml` pin. If you do want the weekly build, install it from the project's releases page and keep it off pinned repos.
 
+### For python-lsp
+
+Two tools, both from `uv`:
+
+```sh
+uv tool install basedpyright
+uv tool install ruff
+```
+
+- `basedpyright` backs both the language server and the Stop gate. `ruff` backs the per-edit fix and format.
+- `jq` and `git` are needed by the hooks, same as the other plugins.
+
+Nothing is needed per project to make the type check run. The formatter is deliberately narrower: it only fires where a project opted into ruff, meaning a `ruff.toml`, a `.ruff.toml`, or a `[tool.ruff]` section in `pyproject.toml`. Reformatting a repo that standardized on something else would rewrite files nobody asked us to touch.
+
+**Why basedpyright and not stock pyright.** They are the same engine — basedpyright 1.39.9 is built on pyright 1.1.411 — but they ship differently. The `pyright` package on PyPI is a wrapper that downloads a Node runtime on first run, which fails on locked-down machines and in offline containers. basedpyright ships real wheels with the server and its runtime bundled, so `uv tool install` is the whole story. It also fixes pyright behaviors that only exist to serve the VS Code extension. If you prefer stock pyright, change `command` in `plugins/python-lsp/.lsp.json` to `pyright-langserver`; the settings block is compatible with both.
+
 ## Install
 
 Install the language server first (the "What you need installed" section above covers it), then add the marketplace and install the plugin. Both commands run at user scope by default, which is global: the plugin auto-loads in every project you open, so you set this up once per machine.
@@ -57,9 +74,10 @@ Install the language server first (the "What you need installed" section above c
 claude plugin marketplace add https://github.com/devops-infinity/devops-lsp
 claude plugin install typescript-lsp@devops-lsp
 claude plugin install rust-lsp@devops-lsp
+claude plugin install python-lsp@devops-lsp
 ```
 
-Install only the ones you want — they're independent, and each stays quiet in projects of the other language.
+Install only the ones you want — they're independent, and each stays quiet in projects of the other languages.
 
 Restart Claude Code so the language server attaches, then confirm it loaded globally:
 
@@ -67,6 +85,7 @@ Restart Claude Code so the language server attaches, then confirm it loaded glob
 claude plugin list
 claude plugin details typescript-lsp@devops-lsp
 claude plugin details rust-lsp@devops-lsp
+claude plugin details python-lsp@devops-lsp
 ```
 
 `claude plugin list` should show each plugin at `Scope: user`, enabled. `details` should report one LSP server, one skill, and two hooks per plugin. Keep the default scope — don't pass `--scope project` unless you want a plugin limited to a single repo, since they're built to be global.
@@ -98,6 +117,16 @@ The same three pieces, with the Rust tools.
 - A skill, `rust-autoheal`, tells Claude how to work on Rust: hover to read inferred types, check implementors before changing a trait, run `cargo clippy` after editing, and fix causes rather than papering over them with `.clone()`, `unwrap()`, or `#[allow(...)]`.
 - A `PostToolUse` hook runs `rustfmt` on each `.rs` file Claude writes or edits. It reads the crate's edition out of `Cargo.toml` first and passes it through, which matters: bare `rustfmt` assumes edition 2015 and simply fails on any file with an `async fn`, leaving it unformatted with nothing to say so. Workspace members that inherit `edition.workspace = true` are handled by walking up to `[workspace.package]`. If `rustfmt` reports an error, the file doesn't parse, and that error goes back to Claude.
 - A `Stop` hook runs `cargo clippy --workspace --all-targets` before Claude can finish, and blocks while any error remains. Clippy is a superset of `cargo check` — it does the full type and borrow check plus the lints in one pass — so one invocation covers both jobs. It blocks on errors only, and reports the warning count alongside. To block on warnings too, add `--deny warnings` to the clippy call in `plugins/rust-lsp/scripts/rust-gate.sh`.
+
+### The Python side
+
+The same three pieces again.
+
+- A skill, `python-autoheal`, tells Claude how to work on Python: hover to read the inferred type rather than trusting an annotation that may be absent or wrong, check references before changing a signature (Python resolves names at runtime, so nothing else will catch a missed caller), and fix causes instead of reaching for `# type: ignore`, `Any`, or a `cast()`.
+- A `PostToolUse` hook runs `ruff check --fix` and then `ruff format` on each edited file, in that order, and hands back whatever ruff could not fix. It fires only in projects that opted into ruff.
+- A `Stop` hook runs `basedpyright` across each touched project and blocks while any error remains. Like the Rust gate, it resolves projects from the changed files — `pyproject.toml`, `setup.py`, or `setup.cfg` — so a package nested in a monorepo is covered.
+
+One asymmetry worth knowing: the server runs in `openFilesOnly` mode, so it reports nothing about files Claude has not opened. A change that breaks a caller three modules away stays invisible until the gate runs. That keeps the live path fast and leaves whole-project truth to the gate, which is the same split the other two plugins use.
 
 ### One checker per job
 
@@ -144,7 +173,7 @@ One shape note, if you edit that file: settings must be nested objects with the 
 
 ## Adding more language servers
 
-The marketplace is built to hold more than one. To add a Python or Go server, for example:
+The marketplace is built to hold more than one. To add a Go or Ruby server, for example:
 
 1. Create `plugins/<name>/.claude-plugin/plugin.json` with the metadata and an `lspServers` pointer.
 2. Add `plugins/<name>/.lsp.json` with the server's command and extension mapping.

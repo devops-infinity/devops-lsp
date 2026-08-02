@@ -1,0 +1,50 @@
+{
+  "python": {
+    "command": "basedpyright-langserver",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".py": "python",
+      ".pyi": "python"
+    },
+    "startupTimeout": 60000,
+    "maxRestarts": 3,
+    "initializationOptions": {
+      "python": {
+        "analysis": {
+          "typeCheckingMode": "standard",
+          "diagnosticMode": "openFilesOnly",
+          "useLibraryCodeForTypes": true,
+          "autoImportCompletions": true,
+          "autoSearchPaths": true,
+          "diagnosticSeverityOverrides": {
+            "reportMissingImports": "error",
+            "reportUndefinedVariable": "error",
+            "reportUnusedImport": "none",
+            "reportUnusedVariable": "none",
+            "reportMissingTypeStubs": "none",
+            "reportImplicitStringConcatenation": "none"
+          }
+        }
+      }
+    },
+    "settings": {
+      "python": {
+        "analysis": {
+          "typeCheckingMode": "standard",
+          "diagnosticMode": "openFilesOnly",
+          "useLibraryCodeForTypes": true,
+          "autoImportCompletions": true,
+          "autoSearchPaths": true,
+          "diagnosticSeverityOverrides": {
+            "reportMissingImports": "error",
+            "reportUndefinedVariable": "error",
+            "reportUnusedImport": "none",
+            "reportUnusedVariable": "none",
+            "reportMissingTypeStubs": "none",
+            "reportImplicitStringConcatenation": "none"
+          }
+        }
+      }
+    }
+  }
+}

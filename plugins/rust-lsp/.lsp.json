@@ -1,0 +1,74 @@
+{
+  "rust": {
+    "command": "rust-analyzer",
+    "args": [],
+    "extensionToLanguage": {
+      ".rs": "rust"
+    },
+    "startupTimeout": 120000,
+    "maxRestarts": 3,
+    "initializationOptions": {
+      "cargo": {
+        "allTargets": true,
+        "features": [],
+        "noDefaultFeatures": false,
+        "buildScripts": { "enable": true, "rebuildOnSave": true },
+        "targetDir": true,
+        "autoreload": true
+      },
+      "procMacro": { "enable": true, "attributes": { "enable": true } },
+      "checkOnSave": true,
+      "check": {
+        "command": "clippy",
+        "allTargets": true,
+        "workspace": true,
+        "extraArgs": []
+      },
+      "diagnostics": {
+        "enable": true,
+        "experimental": { "enable": false },
+        "styleLints": { "enable": false },
+        "disabled": []
+      },
+      "cachePriming": { "enable": true },
+      "files": {
+        "exclude": ["target", "node_modules", "vendor", ".git", ".jj"]
+      },
+      "lru": { "capacity": 128 },
+      "imports": {
+        "granularity": { "group": "crate", "enforce": false },
+        "group": { "enable": true },
+        "preferNoStd": false
+      },
+      "inlayHints": {
+        "typeHints": { "enable": true },
+        "parameterHints": { "enable": true },
+        "chainingHints": { "enable": true },
+        "closingBraceHints": { "enable": false },
+        "maxLength": 40,
+        "renderColons": true
+      },
+      "completion": { "autoimport": { "enable": true } },
+      "hover": { "memoryLayout": { "enable": false } },
+      "references": { "excludeImports": true },
+      "cfg": { "setTest": true },
+      "notifications": { "cargoTomlNotFound": true }
+    },
+    "settings": {
+      "cargo": {
+        "allTargets": true,
+        "features": [],
+        "buildScripts": { "enable": true },
+        "targetDir": true
+      },
+      "procMacro": { "enable": true },
+      "checkOnSave": true,
+      "check": { "command": "clippy", "allTargets": true, "workspace": true },
+      "diagnostics": { "enable": true, "experimental": { "enable": false } },
+      "files": {
+        "exclude": ["target", "node_modules", "vendor", ".git", ".jj"]
+      },
+      "lru": { "capacity": 128 }
+    }
+  }
+}

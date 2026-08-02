@@ -1,7 +1,9 @@
 {
   "shell": {
     "command": "bash-language-server",
-    "args": ["start"],
+    "args": [
+      "start"
+    ],
     "extensionToLanguage": {
       ".sh": "shellscript",
       ".bash": "shellscript",
@@ -14,8 +16,8 @@
         "shellcheckPath": "shellcheck",
         "shellcheckArguments": [],
         "enableSourceErrorDiagnostics": false,
-        "includeAllWorkspaceSymbols": true,
-        "backgroundAnalysisMaxFiles": 500,
+        "includeAllWorkspaceSymbols": false,
+        "backgroundAnalysisMaxFiles": 0,
         "logLevel": "warning",
         "shfmt": {
           "path": "shfmt",

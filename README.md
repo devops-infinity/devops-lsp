@@ -148,17 +148,39 @@ The same three pieces again.
 - A `PostToolUse` hook runs `ruff check --fix` and then `ruff format` on each edited file, in that order, and hands back whatever ruff could not fix. It fires only in projects that opted into ruff.
 - A `Stop` hook runs `basedpyright` across each touched project and blocks while any error remains. Like the Rust gate, it resolves projects from the changed files — `pyproject.toml`, `setup.py`, or `setup.cfg` — so a package nested in a monorepo is covered.
 
-One asymmetry worth knowing: the server runs in `openFilesOnly` mode, so it reports nothing about files Claude has not opened. A change that breaks a caller three modules away stays invisible until the gate runs. That keeps the live path fast and leaves whole-project truth to the gate, which is the same split the other two plugins use.
+One asymmetry worth knowing: the server runs in `openFilesOnly` mode, so it reports nothing about files Claude has not opened. A change that breaks a caller three modules away stays invisible until the gate runs. That keeps the live path fast and leaves whole-project truth to the gate, which is the same split the other two plugins use. It is also the safer choice here: workspace mode has a maintainer-acknowledged regression where it re-analyzes the whole project on every change.
+
+Four details in this plugin exist because of measured behavior rather than documentation:
+
+- **The interpreter is passed explicitly.** basedpyright looks for `./.venv` relative to the project root and ignores `VIRTUAL_ENV` completely. If it picks the wrong interpreter, every third-party import resolves to nothing and Claude reads a working project as broken. The gate finds the venv itself and passes `--pythonpath`. Verified by installing a package into a venv and confirming that hiding the venv flips the result to "Import could not be resolved".
+- **A failed run can look clean.** Point basedpyright at a path that does not exist and it writes **zero bytes** to stdout and exits 4. A gate that only reads stdout finds no errors and passes. This one was a real bug in the first version of this plugin. The gate now treats any exit above 1, or any output without a `summary` key, as unverified rather than clean.
+- **A rejected config is nearly silent.** A one-character typo in `typeCheckingMode` writes a line to stderr, still emits valid JSON on stdout, and quietly reverts to a different checking mode. The gate captures stderr and reports configuration rejection as a blocking condition, because the alternative is a check that ran with settings nobody chose.
+- **Settings are sent twice, on purpose.** The server asks for four sections and reads analysis settings from `basedpyright.analysis`, falling back to `python.analysis` through an undocumented compatibility path the official docs say is unsupported. Both are sent so neither route can leave the config unapplied. `initializationOptions` is deliberately absent: the server reads no analysis settings from it at all, so a block there would be dead config.
+
+`disableTaggedHints` is on. Without it the server pushes hint-severity "unnecessary code" diagnostics that the CLI never reports — they burn context and prompt the model to "fix" code that is fine.
 
 ### The shell side
 
 The same three pieces, with the shell tools.
 
 - A skill, `shell-autoheal`, tells Claude how to work on shell: quote every expansion, don't parse `ls`, know what `set -euo pipefail` does not cover, and never paper over a finding with a bare `# shellcheck disable=`.
-- A `PostToolUse` hook runs `shfmt --write` on each edited file, then reports anything shellcheck still finds. If `shfmt` fails, the file does not parse, and that error goes back to Claude.
-- A `Stop` hook runs `shellcheck` over the changed shell files and blocks while any `error`-level finding remains. Warnings and info are reported but do not block, matching the other gates.
+- A `PostToolUse` hook applies `shellcheck --format=diff` and then runs `shfmt --write`. The fix step is genuinely safe to run unattended: shellcheck only emits a replacement where the correction is unambiguous — quoting an expansion, adding `|| exit` after a bare `cd` — and leaves anything requiring judgement untouched. Measured on a script with three defects, it fixed the two mechanical ones and correctly left `for x in $(ls)` alone.
+- A `Stop` hook runs `shellcheck` over the changed shell files and blocks on `error`, `warning`, **and** `info`. Only `style` is advisory.
+
+That blocking threshold is the important detail, and it is not the obvious choice. shellcheck's severity tiers do not line up with how dangerous a defect is. `rm -rf $var/`, which wipes the filesystem when the variable is empty, is only a `warning` (SC2115). A `cd` that failed and let the script keep deleting in the wrong directory is also only a `warning` (SC2164). And unquoted expansion — the single most common real bug in shell — is merely `info` (SC2086). An error-only gate ships all three. This one was verified by running each case: before the threshold changed, the gate stayed silent on all of them.
+
+Two other things this gate does that the others don't need to:
+
+- It checks shellcheck's exit code, not just its output. Codes 2, 3 and 4 mean the scan never ran — an unreadable file, a bad invocation, an unknown flag. Those block with their own message, because reporting "no findings" from a scan that did not happen is the worst possible outcome.
+- It matches files by shebang as well as extension, so a `pre-commit` hook or an extensionless CLI entry point is covered rather than silently skipped.
+
+It also deliberately avoids `--severity=info` as the filter mechanism. Passing that flag makes shellcheck emit an empty comment list *and* exit 0, which is indistinguishable from a clean file. Severity is filtered after the fact instead, where an empty result still carries meaning.
 
 Its timeout is 120 seconds rather than 600, because shellcheck runs per file and is fast; there is no project-wide compile to wait on.
+
+**Background analysis is off** (`backgroundAnalysisMaxFiles: 0`, `includeAllWorkspaceSymbols: false`). Workspace-wide symbol indexing exists to serve completion, hover documentation and rename — none of which an agent consuming diagnostics uses — and it is the driver behind several open upstream reports of the server ballooning CPU and memory. Per-file diagnostics run on a separate path and are unaffected.
+
+**On the server's release state.** bash-language-server 5.6.0 is the current npm release, but it was published in April 2025 and the pipeline has been stalled since: a 5.7.0 was prepared in January 2026 and never shipped after the project's publish credentials expired. The project is not abandoned — commits continue and the maintainer is active — but treat 5.6.0 as frozen and pin it. One consequence worth knowing: 5.6.0 passes `--external-sources` to shellcheck unconditionally with no way to turn it off; the switch that fixes that exists only on unreleased `main`. The plugin absorbs the fallout by excluding SC1091, so unresolvable `source` paths cannot block the gate.
 
 ### One checker per job
 

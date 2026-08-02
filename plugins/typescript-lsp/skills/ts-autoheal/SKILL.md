@@ -23,4 +23,6 @@ Work through the changed files and repeat until they're clean:
 
 ## You're done when
 
-`tsc --noEmit` comes back clean and `eslint` has nothing left to report on the changed files. A Stop hook runs the project type-check before the turn can end, so this isn't optional.
+`tsc --noEmit` comes back clean and `eslint` has nothing left to report on the changed files.
+
+**Nothing checks this for you.** There is no gate at the end of the turn — if you skip the type-check, broken code ships and nobody is told. Run `tsc --noEmit` yourself before you say the work is done, and treat its output as the verdict.

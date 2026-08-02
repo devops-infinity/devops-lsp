@@ -37,4 +37,6 @@ Use it deliberately, not as a routine step, and know its three limits: it can't 
 
 ## You're done when
 
-`cargo clippy --workspace --all-targets` reports no errors. A Stop hook runs it before the turn can end, so this isn't optional. Clean up the warnings it reports too — they're what clippy is for.
+`cargo clippy --workspace --all-targets` reports no errors. Clean up the warnings too — they're what clippy is for.
+
+**Nothing checks this for you.** There is no gate at the end of the turn, and the server's own diagnostics may never refresh after an edit. If you skip clippy, broken code ships silently. Run it yourself and treat its output as the verdict.

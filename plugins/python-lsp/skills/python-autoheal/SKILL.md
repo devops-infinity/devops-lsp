@@ -30,4 +30,6 @@ The server is set to `openFilesOnly`, so it says nothing about files you haven't
 
 ## You're done when
 
-`basedpyright` reports no errors and `ruff check` is clean on the files you touched. A Stop hook runs the project type-check before the turn can end, so this isn't optional.
+`basedpyright` reports no errors and `ruff check` is clean on the files you touched.
+
+**Nothing checks this for you.** There is no gate at the end of the turn, and the server only reports on files you opened — a caller you broke three modules away is invisible. Run `basedpyright` over the project yourself and treat its output as the verdict.

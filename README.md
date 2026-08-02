@@ -2,7 +2,7 @@
 
 A small marketplace of Claude Code language-server plugins, kept under the DevOps brand. Add it once and Claude Code gets real code intelligence, plus an auto-heal layer, in every repo you open — a NestJS API, a Next.js app, a Cargo workspace, a Python service, a pile of deploy scripts, a Laravel app, or anything else built on TS/JS, Rust, Python, shell, or PHP.
 
-All five plugins follow the same shape. Each one wires up a language server so Claude resolves definitions, references, hovers, symbols, and call hierarchy from the type system instead of guessing from text. Each one adds an auto-heal layer: a fast formatter or fixer after every edit, and a whole-project check that won't let a turn end while errors remain. Each one bundles a skill that teaches Claude how to use the two together.
+All five plugins follow the same shape. Each one wires up a language server so Claude resolves definitions, references, hovers, symbols, and call hierarchy from the type system instead of guessing from text. Each one adds an auto-heal layer: a fast formatter or fixer after every edit, plus a whole-project check script that Claude runs itself. Each one bundles a skill that teaches Claude how to use the two together.
 
 - `typescript-lsp` — `typescript-language-server`, with `eslint --fix` after edits and a `tsc --noEmit` gate.
 - `rust-lsp` — `rust-analyzer`, with `rustfmt` after edits and a `cargo clippy` gate.
@@ -43,7 +43,7 @@ rustup component add rust-analyzer rust-src clippy rustfmt
 ```
 
 - `rust-analyzer` is the server. `rust-src` is the standard-library source it reads to resolve `std` symbols; without it, `std` types don't resolve.
-- `clippy` backs both the server's live diagnostics and the Stop gate. `rustfmt` backs the per-edit format hook.
+- `clippy` backs both the server's live diagnostics and the gate script. `rustfmt` backs the per-edit format hook.
 - `jq` and `git` are needed by the hooks, same as the TypeScript plugin.
 
 Nothing is needed per project. Cargo already knows how to build the workspace, so unlike the TS side there's no per-project dev dependency to install.
@@ -61,7 +61,7 @@ uv tool install basedpyright
 uv tool install ruff
 ```
 
-- `basedpyright` backs both the language server and the Stop gate. `ruff` backs the per-edit fix and format.
+- `basedpyright` backs both the language server and the gate script. `ruff` backs the per-edit fix and format.
 - `jq` and `git` are needed by the hooks, same as the other plugins.
 
 Nothing is needed per project to make the type check run. The formatter is deliberately narrower: it only fires where a project opted into ruff, meaning a `ruff.toml`, a `.ruff.toml`, or a `[tool.ruff]` section in `pyproject.toml`. Reformatting a repo that standardized on something else would rewrite files nobody asked us to touch.
@@ -78,7 +78,7 @@ brew install shellcheck shfmt
 ```
 
 - `bash-language-server` is the server; it shells out to `shellcheck` for diagnostics, so both must be on your PATH.
-- `shfmt` backs the per-edit format hook. `shellcheck` also backs the Stop gate.
+- `shfmt` backs the per-edit format hook. `shellcheck` also backs the gate script.
 - `jq` and `git` are needed by the hooks, same as the other plugins.
 
 Versions as of August 2nd 2026: bash-language-server 5.6.0, shellcheck 0.11.0, shfmt 3.13.1. On Debian or Ubuntu, `sudo apt-get install shellcheck shfmt`.
@@ -98,7 +98,7 @@ composer global require laravel/pint phpstan/phpstan
 
 - `intelephense` is the server. It needs Node, not PHP.
 - `php` must be on your PATH for the parse check. `pint` backs the fallback formatter; a project that ships its own Pint, PHP-CS-Fixer, or PHP_CodeSniffer in `vendor/bin` is used in preference.
-- `phpstan` backs the Stop gate, again preferring the project's own copy.
+- `phpstan` backs the gate script, again preferring the project's own copy.
 - `jq` and `git` are needed by the hooks, same as the other plugins.
 
 Versions as of August 2nd 2026: Intelephense 1.18.5, Pint 1.30.3, PHPStan 2.2.7, PHP-CS-Fixer 3.95.18, PHP 8.5.9 (8.4.x and 8.3.x also supported).
@@ -155,9 +155,9 @@ Three pieces work together.
 
 - A skill, `ts-autoheal`, tells Claude how to work on TS/JS: check references before changing a shared signature, run `eslint --fix` and `tsc --noEmit` after editing, trust `tsc` over the pushed diagnostics when they disagree, and keep going until both are clean.
 - A `PostToolUse` hook runs `eslint --fix` on each TS/JS file Claude writes or edits, then hands any leftover lint back to Claude. It only fires in projects that have an ESLint config, and it's quick because it runs on the single file.
-- A `Stop` hook runs a full `tsc --noEmit` before Claude is allowed to finish. If the project doesn't type-check, Claude is sent back to fix it. To stay out of the way, this gate only runs inside a git repo that has a `tsconfig.json` and uncommitted TS changes.
+- A gate script, `scripts/ts-gate.sh`, runs a full `tsc --noEmit`. It ships **unwired** — see "The gates are not wired up" below.
 
-A note on speed, since this is a global plugin. A whole-project `tsc --noEmit` can take anywhere from a second to a minute on a large codebase, and the `Stop` gate runs it at the end of any turn where you have uncommitted TS changes. If that's too heavy for a given machine or repo, delete the `Stop` block from `plugins/typescript-lsp/hooks/hooks.json`, or remove the hook entirely. You keep the fast per-edit `eslint --fix` and the skill guidance, and per-edit type feedback still arrives for free through the server's pushed diagnostics.
+A note on speed, since these are global plugins and this is why the gates ship unwired. A whole-project `tsc --noEmit` can take a minute on a large codebase; a cold `cargo clippy` can take several; PHPStan with Larastan boots the Laravel container, so a project whose service providers touch a database or an external service would do that at the end of every turn. Paying that on each turn, in every repo you open, is a poor trade for a check Claude can run once when it matters.
 
 ### The Rust side
 
@@ -165,7 +165,7 @@ The same three pieces, with the Rust tools.
 
 - A skill, `rust-autoheal`, tells Claude how to work on Rust: hover to read inferred types, check implementors before changing a trait, run `cargo clippy` after editing, and fix causes rather than papering over them with `.clone()`, `unwrap()`, or `#[allow(...)]`.
 - A `PostToolUse` hook runs `rustfmt` on each `.rs` file Claude writes or edits. It reads the crate's edition out of `Cargo.toml` first and passes it through, which matters: bare `rustfmt` assumes edition 2015 and simply fails on any file with an `async fn`, leaving it unformatted with nothing to say so. Workspace members that inherit `edition.workspace = true` are handled by walking up to `[workspace.package]`. If `rustfmt` reports an error, the file doesn't parse, and that error goes back to Claude.
-- A `Stop` hook runs `cargo clippy --workspace --all-targets` before Claude can finish, and blocks while any error remains. Clippy is a superset of `cargo check` — it does the full type and borrow check plus the lints in one pass — so one invocation covers both jobs. It blocks on errors only, and reports the warning count alongside. To block on warnings too, add `--deny warnings` to the clippy call in `plugins/rust-lsp/scripts/rust-gate.sh`.
+- A gate script, `scripts/rust-gate.sh`, runs `cargo clippy --workspace --all-targets`. It ships **unwired**. Clippy is a superset of `cargo check` — it does the full type and borrow check plus the lints in one pass — so one invocation covers both jobs. It blocks on errors only, and reports the warning count alongside. To block on warnings too, add `--deny warnings` to the clippy call in `plugins/rust-lsp/scripts/rust-gate.sh`.
 
 ### The Python side
 
@@ -173,7 +173,7 @@ The same three pieces again.
 
 - A skill, `python-autoheal`, tells Claude how to work on Python: hover to read the inferred type rather than trusting an annotation that may be absent or wrong, check references before changing a signature (Python resolves names at runtime, so nothing else will catch a missed caller), and fix causes instead of reaching for `# type: ignore`, `Any`, or a `cast()`.
 - A `PostToolUse` hook runs `ruff check --fix` and then `ruff format` on each edited file, in that order, and hands back whatever ruff could not fix. It fires only in projects that opted into ruff.
-- A `Stop` hook runs `basedpyright` across each touched project and blocks while any error remains. Like the Rust gate, it resolves projects from the changed files — `pyproject.toml`, `setup.py`, or `setup.cfg` — so a package nested in a monorepo is covered.
+- A gate script, `scripts/python-gate.sh`, runs `basedpyright` across each touched project. It ships **unwired**. Like the Rust gate, it resolves projects from the changed files — `pyproject.toml`, `setup.py`, or `setup.cfg` — so a package nested in a monorepo is covered.
 
 One asymmetry worth knowing: the server runs in `openFilesOnly` mode, so it reports nothing about files Claude has not opened. A change that breaks a caller three modules away stays invisible until the gate runs. That keeps the live path fast and leaves whole-project truth to the gate, which is the same split the other two plugins use. It is also the safer choice here: workspace mode has a maintainer-acknowledged regression where it re-analyzes the whole project on every change.
 
@@ -192,7 +192,7 @@ The same three pieces, with the shell tools.
 
 - A skill, `shell-autoheal`, tells Claude how to work on shell: quote every expansion, don't parse `ls`, know what `set -euo pipefail` does not cover, and never paper over a finding with a bare `# shellcheck disable=`.
 - A `PostToolUse` hook applies `shellcheck --format=diff` and then runs `shfmt --write`. The fix step is genuinely safe to run unattended: shellcheck only emits a replacement where the correction is unambiguous — quoting an expansion, adding `|| exit` after a bare `cd` — and leaves anything requiring judgement untouched. Measured on a script with three defects, it fixed the two mechanical ones and correctly left `for x in $(ls)` alone.
-- A `Stop` hook runs `shellcheck` over the changed shell files and blocks on `error`, `warning`, **and** `info`. Only `style` is advisory.
+- A gate script, `scripts/shell-gate.sh`, runs `shellcheck` over the changed shell files and reports `error`, `warning`, **and** `info`. Only `style` is advisory. It ships **unwired**.
 
 That blocking threshold is the important detail, and it is not the obvious choice. shellcheck's severity tiers do not line up with how dangerous a defect is. `rm -rf $var/`, which wipes the filesystem when the variable is empty, is only a `warning` (SC2115). A `cd` that failed and let the script keep deleting in the wrong directory is also only a `warning` (SC2164). And unquoted expansion — the single most common real bug in shell — is merely `info` (SC2086). An error-only gate ships all three. This one was verified by running each case: before the threshold changed, the gate stayed silent on all of them.
 
@@ -213,7 +213,7 @@ Its timeout is 120 seconds rather than 600, because shellcheck runs per file and
 
 - A skill, `php-autoheal`, tells Claude how to work on PHP: check references before changing a signature, never run PHPStan without a level, and don't silence findings with `@phpstan-ignore` or by widening a type to `mixed`.
 - A `PostToolUse` hook runs `php -l` first and stops there if the file does not parse, then runs whichever formatter the project actually configured. The detection order is `pint.json` or `vendor/bin/pint`, then `.php-cs-fixer.php`, then `phpcs.xml`, then Pint's default preset as a fallback. Exactly one runs.
-- A `Stop` hook runs PHPStan across every touched project and blocks while errors remain.
+- A gate script, `scripts/php-gate.sh`, runs PHPStan across every touched project. It ships **unwired**.
 
 Three details here came from reading the tools rather than their docs:
 
@@ -225,6 +225,36 @@ PHP-CS-Fixer is always invoked with `--path-mode=intersection`. Its default, `ov
 
 Rector is deliberately absent. It rewrites semantics rather than formatting, needs a project-specific `rector.php` to do anything useful, and its own workflow is dry-run, review the diff, run the tests. None of that fits inside a hook that fires after every edit.
 
+### The gates are not wired up
+
+Every plugin ships a gate script — `scripts/*-gate.sh` — that runs the authoritative whole-project check. **None of them is registered as a `Stop` hook.** They exist to be run, by Claude following its skill, or by you from the command line. Nothing blocks a turn.
+
+That is deliberate. A `Stop` hook fires at the end of **every** turn in **every** repo you open, because these plugins are global. The cost is real: a whole-project `tsc --noEmit` can take a minute, a cold `cargo clippy` several, and PHPStan with Larastan boots the Laravel container — so a project whose service providers touch a database or a queue would do that on every turn. And a gate that blocks is the single most disruptive thing a plugin can do: get it wrong and the session cannot finish.
+
+So the check moved from the harness to the model. Each skill now says plainly that nothing will catch the mistake for it, and to run the check itself before calling the work done. That is a weaker guarantee, honestly stated, and it is the right trade for something that loads in every repo.
+
+To turn a gate on for a project or a machine where you want it enforced, add the `Stop` block back to that plugin's `hooks/hooks.json`:
+
+```json
+"Stop": [
+  {
+    "hooks": [
+      { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/rust-gate.sh", "timeout": 600 }
+    ]
+  }
+]
+```
+
+Keep the timeout generous — 600 seconds for the compiled languages, since the 60-second default is not enough for a cold build. The scripts are tested and ready; only the wiring is absent.
+
+To run one by hand, feed it the JSON a hook would receive:
+
+```sh
+echo '{"stop_hook_active":false}' | ~/.claude/plugins/cache/devops-lsp/rust-lsp/1.0.0/scripts/rust-gate.sh
+```
+
+It prints a JSON block describing what it found, or nothing at all when the project is clean.
+
 ### One checker per job
 
 Rust makes it easy to end up running the same compile three or four times per edit — a format hook, a per-edit `cargo check`, the server's own `cargo clippy`, and a gate. That's slow, and the duplicated output teaches Claude to skim past it. This plugin deliberately assigns each job exactly one owner:
@@ -235,13 +265,13 @@ Rust makes it easy to end up running the same compile three or four times per ed
 
 If you also run a personal `PostToolUse` hook that formats or checks Rust, remove its Rust branch when you install this plugin — otherwise you get two formatters and an extra full compile on every edit.
 
-One caveat, measured rather than assumed. rust-analyzer's compiler diagnostics come from `cargo`, and `cargo` re-runs on save. Claude Code writes files without necessarily sending the editor "save" notification, so those diagnostics may not refresh after an edit. Tested directly: a type error introduced through a `didChange` with no `didSave` was reported by nothing — flycheck never re-ran, and native type-mismatch is an experimental diagnostic that's off by default here because it misfires. That is exactly why the Stop gate exists and why the bundled skill tells Claude to run clippy itself rather than wait to be told. Turning on `diagnostics.experimental.enable` buys live type-mismatch hints at the cost of false positives; it's off on purpose.
+One caveat, measured rather than assumed. rust-analyzer's compiler diagnostics come from `cargo`, and `cargo` re-runs on save. Claude Code writes files without necessarily sending the editor "save" notification, so those diagnostics may not refresh after an edit. Tested directly: a type error introduced through a `didChange` with no `didSave` was reported by nothing — flycheck never re-ran, and native type-mismatch is an experimental diagnostic that's off by default here because it misfires. That is exactly why the bundled skill tells Claude to run clippy itself rather than wait to be told. Turning on `diagnostics.experimental.enable` buys live type-mismatch hints at the cost of false positives; it's off on purpose.
 
 Both Rust hooks skip quietly, and fast, in three cases: outside a Cargo project, when `rustfmt` or `cargo` isn't callable, and when a toolchain file pins a version that isn't installed.
 
 That last one is worth explaining, because getting it wrong is expensive. `cargo`, `rustfmt`, and even `rustup toolchain list` are rustup shims, and every one of them resolves the active toolchain from the current directory. Run any of them inside a project pinned to a toolchain you don't have, and rustup downloads it right there — about a gigabyte, with no prompt, inside a hook. So the guard reads the filesystem only: it walks up for `rust-toolchain.toml` or a legacy bare `rust-toolchain` file, reads the channel, and checks `~/.rustup/toolchains` directly. It never invokes rustup, and it runs before anything else. The tool-availability probes run from `/` for the same reason.
 
-The gate finds its work from the changed files rather than assuming a layout, so a Cargo project nested anywhere in the repo is covered — `services/api/Cargo.toml` in a monorepo with no root manifest works, and several separate workspaces in one repo each get checked. It still only runs inside a git repo with uncommitted `.rs` changes. Its hook timeout is 600 seconds, because a cold `cargo clippy` on a large workspace blows straight past the 60-second default. To drop the gate, delete the `Stop` block from `plugins/rust-lsp/hooks/hooks.json`.
+The gate finds its work from the changed files rather than assuming a layout, so a Cargo project nested anywhere in the repo is covered — `services/api/Cargo.toml` in a monorepo with no root manifest works, and several separate workspaces in one repo each get checked. It still only runs inside a git repo with uncommitted `.rs` changes.
 
 ## NestJS and Next.js
 

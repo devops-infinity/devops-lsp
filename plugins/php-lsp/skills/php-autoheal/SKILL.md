@@ -31,4 +31,6 @@ You have a PHP language server (Intelephense), and it is read-only. It resolves 
 
 ## You're done when
 
-`vendor/bin/phpstan analyse` reports no errors and the file parses. A Stop hook runs PHPStan across every touched project before the turn can end, so this isn't optional.
+`vendor/bin/phpstan analyse` reports no errors and the file parses.
+
+**Nothing checks this for you.** There is no gate at the end of the turn, and the language server's diagnostics are switched off on purpose. PHPStan is the only thing that will tell you the code is wrong, and only if you run it. Remember to pass an explicit `--level` when the project has no `phpstan.neon`, or it analyses at level 0 and reports almost nothing.

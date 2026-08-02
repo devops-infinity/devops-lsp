@@ -29,4 +29,6 @@ You have a shell language server (bash-language-server), and it's read-only. It 
 
 ## You're done when
 
-`shellcheck` reports no errors on the files you touched. A Stop hook runs it before the turn can end, so this isn't optional. Clear the warnings too — in shell they are usually real defects, not style.
+`shellcheck` reports no errors on the files you touched. Clear the warnings and info findings too — in shell those are usually real defects, not style. `rm -rf $var/` and a `cd` that failed are only warnings; unquoted expansion is only info.
+
+**Nothing checks this for you.** There is no gate at the end of the turn. Run `shellcheck` yourself and treat its output as the verdict.

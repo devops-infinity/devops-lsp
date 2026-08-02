@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "php-lsp",
+  "displayName": "PHP LSP + Auto-Heal",
+  "description": "PHP intelligence for Claude Code, backed by Intelephense, with an auto-heal layer on top: it runs a syntax check and the project's own formatter after each edit and holds a turn open until PHPStan reports no errors. A bundled skill shows Claude how to use them together.",
+  "version": "1.0.0",
+  "author": {
+    "name": "DevOps",
+    "email": "sazzad@devops.bd"
+  },
+  "homepage": "https://devops.bd",
+  "repository": "https://github.com/devops-infinity/devops-lsp",
+  "license": "MIT",
+  "keywords": [
+    "php",
+    "laravel",
+    "lsp",
+    "intelephense",
+    "phpstan",
+    "pint",
+    "php-cs-fixer",
+    "auto-fix",
+    "auto-heal",
+    "diagnostics",
+    "code-intelligence"
+  ],
+  "lspServers": "./.lsp.json"
+}

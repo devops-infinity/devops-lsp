@@ -5,7 +5,7 @@
     "name": "DevOps",
     "email": "sazzad@devops.bd"
   },
-  "description": "A DevOps marketplace of Claude Code language-server plugins. Add it once and use the same TypeScript, JavaScript, Rust, and Python support in every project.",
+  "description": "A DevOps marketplace of Claude Code language-server plugins. Add it once and use the same TypeScript, JavaScript, Rust, Python, shell, and PHP support in every project.",
   "plugins": [
     {
       "name": "typescript-lsp",
@@ -44,6 +44,17 @@
       "name": "shell-lsp",
       "source": "./plugins/shell-lsp",
       "description": "Shell script code intelligence, plus auto-heal: shfmt after edits and a shellcheck gate before a turn can end.",
+      "version": "1.0.0",
+      "author": {
+        "name": "DevOps",
+        "email": "sazzad@devops.bd"
+      },
+      "category": "development"
+    },
+    {
+      "name": "php-lsp",
+      "source": "./plugins/php-lsp",
+      "description": "PHP code intelligence, plus auto-heal: php -l and the project's formatter after edits and a PHPStan gate before a turn can end.",
       "version": "1.0.0",
       "author": {
         "name": "DevOps",

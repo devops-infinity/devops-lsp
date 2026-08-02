@@ -1,13 +1,14 @@
 # devops-lsp
 
-A small marketplace of Claude Code language-server plugins, kept under the DevOps brand. Add it once and Claude Code gets real code intelligence, plus an auto-heal layer, in every repo you open — a NestJS API, a Next.js app, a Cargo workspace, a Python service, a pile of deploy scripts, or anything else built on TS/JS, Rust, Python, or shell.
+A small marketplace of Claude Code language-server plugins, kept under the DevOps brand. Add it once and Claude Code gets real code intelligence, plus an auto-heal layer, in every repo you open — a NestJS API, a Next.js app, a Cargo workspace, a Python service, a pile of deploy scripts, a Laravel app, or anything else built on TS/JS, Rust, Python, shell, or PHP.
 
-All four plugins follow the same shape. Each one wires up a language server so Claude resolves definitions, references, hovers, symbols, and call hierarchy from the type system instead of guessing from text. Each one adds an auto-heal layer: a fast formatter or fixer after every edit, and a whole-project check that won't let a turn end while errors remain. Each one bundles a skill that teaches Claude how to use the two together.
+All five plugins follow the same shape. Each one wires up a language server so Claude resolves definitions, references, hovers, symbols, and call hierarchy from the type system instead of guessing from text. Each one adds an auto-heal layer: a fast formatter or fixer after every edit, and a whole-project check that won't let a turn end while errors remain. Each one bundles a skill that teaches Claude how to use the two together.
 
 - `typescript-lsp` — `typescript-language-server`, with `eslint --fix` after edits and a `tsc --noEmit` gate.
 - `rust-lsp` — `rust-analyzer`, with `rustfmt` after edits and a `cargo clippy` gate.
 - `python-lsp` — `basedpyright`, with `ruff check --fix` and `ruff format` after edits and a `basedpyright` gate.
 - `shell-lsp` — `bash-language-server`, with `shfmt` after edits and a `shellcheck` gate.
+- `php-lsp` — `intelephense`, with `php -l` plus the project's formatter after edits and a `PHPStan` gate.
 
 ## What you need installed
 
@@ -86,6 +87,30 @@ Unlike the Python plugin, the formatter here runs on every shell file Claude edi
 
 **`.zsh` is deliberately unmapped.** shellcheck cannot parse zsh, so pointing the server at zsh files yields parse errors rather than findings. Zsh scripts are left alone entirely.
 
+### For php-lsp
+
+The server from Bun, the PHP tools from Composer:
+
+```sh
+bun add -g intelephense@1.18.5
+composer global require laravel/pint phpstan/phpstan
+```
+
+- `intelephense` is the server. It needs Node, not PHP.
+- `php` must be on your PATH for the parse check. `pint` backs the fallback formatter; a project that ships its own Pint, PHP-CS-Fixer, or PHP_CodeSniffer in `vendor/bin` is used in preference.
+- `phpstan` backs the Stop gate, again preferring the project's own copy.
+- `jq` and `git` are needed by the hooks, same as the other plugins.
+
+Versions as of August 2nd 2026: Intelephense 1.18.5, Pint 1.30.3, PHPStan 2.2.7, PHP-CS-Fixer 3.95.18, PHP 8.5.9 (8.4.x and 8.3.x also supported).
+
+**On Intelephense's licence.** It is proprietary freemium, but the free tier covers everything an agent uses: go to definition, find references, hover, document and workspace symbols. The paid tier gates rename, code actions, code lens and inlay hints — features that matter in an editor and not to Claude. Nothing here requires a key, and the plugin never ships one. If you own a licence, drop it at `~/.config/intelephense/global/licence.txt` and the server picks it up. The plugin installs the server from npm rather than vendoring it, which the licence requires.
+
+**Diagnostics are turned off, deliberately.** Intelephense has no framework awareness. On Eloquent magic methods, facades, and Filament's fluent builders it reports "undefined method" on code that is entirely correct — the most expensive kind of false positive, because Claude will try to fix working code. PHPStan owns diagnostics instead, which keeps one owner per job and removes the largest false-positive source in a single setting.
+
+**Blade is not mapped and `.inc` is not claimed.** Blade's `@directive` syntax is not PHP, so handing `.blade.php` to a PHP parser produces garbage; the templates are also excluded from Intelephense's index, since its `*.php` glob would otherwise pull them in anyway. `.inc` is used for plenty of things that are not PHP.
+
+**The runner-up, if you want an all-open-source stack.** PHPantom is an MIT-licensed PHP language server written in Rust with native Laravel Eloquent support and no Node or PHP runtime needed. It is the better technical fit for Laravel, and it already ships its own Claude Code plugin. It is not the default here only because it is six months old, sits at 0.9.0, and its own documentation still reports occasional false positives. Revisit it after 1.0. Phpactor was ruled out because its maintainer's README now warns users away from it.
+
 ## Install
 
 Install the language server first (the "What you need installed" section above covers it), then add the marketplace and install the plugin. Both commands run at user scope by default, which is global: the plugin auto-loads in every project you open, so you set this up once per machine.
@@ -96,6 +121,7 @@ claude plugin install typescript-lsp@devops-lsp
 claude plugin install rust-lsp@devops-lsp
 claude plugin install python-lsp@devops-lsp
 claude plugin install shell-lsp@devops-lsp
+claude plugin install php-lsp@devops-lsp
 ```
 
 Install only the ones you want — they're independent, and each stays quiet in projects of the other languages.
@@ -108,6 +134,7 @@ claude plugin details typescript-lsp@devops-lsp
 claude plugin details rust-lsp@devops-lsp
 claude plugin details python-lsp@devops-lsp
 claude plugin details shell-lsp@devops-lsp
+claude plugin details php-lsp@devops-lsp
 ```
 
 `claude plugin list` should show each plugin at `Scope: user`, enabled. `details` should report one LSP server, one skill, and two hooks per plugin. Keep the default scope — don't pass `--scope project` unless you want a plugin limited to a single repo, since they're built to be global.
@@ -181,6 +208,22 @@ Its timeout is 120 seconds rather than 600, because shellcheck runs per file and
 **Background analysis is off** (`backgroundAnalysisMaxFiles: 0`, `includeAllWorkspaceSymbols: false`). Workspace-wide symbol indexing exists to serve completion, hover documentation and rename — none of which an agent consuming diagnostics uses — and it is the driver behind several open upstream reports of the server ballooning CPU and memory. Per-file diagnostics run on a separate path and are unaffected.
 
 **On the server's release state.** bash-language-server 5.6.0 is the current npm release, but it was published in April 2025 and the pipeline has been stalled since: a 5.7.0 was prepared in January 2026 and never shipped after the project's publish credentials expired. The project is not abandoned — commits continue and the maintainer is active — but treat 5.6.0 as frozen and pin it. One consequence worth knowing: 5.6.0 passes `--external-sources` to shellcheck unconditionally with no way to turn it off; the switch that fixes that exists only on unreleased `main`. The plugin absorbs the fallout by excluding SC1091, so unresolvable `source` paths cannot block the gate.
+
+### The PHP side
+
+- A skill, `php-autoheal`, tells Claude how to work on PHP: check references before changing a signature, never run PHPStan without a level, and don't silence findings with `@phpstan-ignore` or by widening a type to `mixed`.
+- A `PostToolUse` hook runs `php -l` first and stops there if the file does not parse, then runs whichever formatter the project actually configured. The detection order is `pint.json` or `vendor/bin/pint`, then `.php-cs-fixer.php`, then `phpcs.xml`, then Pint's default preset as a fallback. Exactly one runs.
+- A `Stop` hook runs PHPStan across every touched project and blocks while errors remain.
+
+Three details here came from reading the tools rather than their docs:
+
+- **PHPStan with no config silently runs at level 0 and passes.** Level 0 catches almost nothing. Measured on a function declared `: int` that returns a string, level 0 reports zero errors and level 5 catches it. So when a project has no `phpstan.neon`, the gate passes `--level=5` explicitly and says so in its output rather than letting a meaningless clean result through.
+- **`php -l` exits 255 on a parse error, not 1.** A hook checking `-eq 1` would miss every syntax error.
+- **Pint ignores `--format` under Claude Code.** It detects the agent through the `CLAUDECODE` environment variable and emits its own `agent`-shaped JSON no matter what format you request, so the hook reads that shape instead of fighting it. `--repair` exits 1 when it changed something and 0 when it did not.
+
+PHP-CS-Fixer is always invoked with `--path-mode=intersection`. Its default, `override`, makes an explicit file path ignore the config's own `Finder`, so a per-file hook would cheerfully reformat files the project deliberately excluded.
+
+Rector is deliberately absent. It rewrites semantics rather than formatting, needs a project-specific `rector.php` to do anything useful, and its own workflow is dry-run, review the diff, run the tests. None of that fits inside a hook that fires after every edit.
 
 ### One checker per job
 

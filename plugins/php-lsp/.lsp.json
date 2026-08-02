@@ -1,0 +1,46 @@
+{
+  "php": {
+    "command": "intelephense",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".php": "php",
+      ".phtml": "php",
+      ".php3": "php",
+      ".php4": "php",
+      ".php5": "php",
+      ".php7": "php",
+      ".php8": "php",
+      ".phps": "php"
+    },
+    "startupTimeout": 120000,
+    "maxRestarts": 3,
+    "settings": {
+      "intelephense": {
+        "diagnostics": {
+          "enable": false
+        },
+        "format": {
+          "enable": false
+        },
+        "telemetry": {
+          "enabled": false
+        },
+        "files": {
+          "associations": ["*.php", "*.phtml", "*.php3", "*.php4", "*.php5", "*.php7", "*.php8", "*.phps"],
+          "maxSize": 5000000,
+          "exclude": [
+            "**/.git/**",
+            "**/node_modules/**",
+            "**/bower_components/**",
+            "**/vendor/**/{Tests,tests}/**",
+            "**/vendor/**/vendor/**",
+            "**/*.blade.php"
+          ]
+        },
+        "compatibility": {
+          "preferPsalmPhpstanPrefixedAnnotations": true
+        }
+      }
+    }
+  }
+}

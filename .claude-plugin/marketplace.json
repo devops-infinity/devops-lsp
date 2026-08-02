@@ -39,6 +39,17 @@
         "email": "sazzad@devops.bd"
       },
       "category": "development"
+    },
+    {
+      "name": "shell-lsp",
+      "source": "./plugins/shell-lsp",
+      "description": "Shell script code intelligence, plus auto-heal: shfmt after edits and a shellcheck gate before a turn can end.",
+      "version": "1.0.0",
+      "author": {
+        "name": "DevOps",
+        "email": "sazzad@devops.bd"
+      },
+      "category": "development"
     }
   ]
 }

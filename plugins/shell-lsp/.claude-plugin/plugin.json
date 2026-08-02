@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "shell-lsp",
+  "displayName": "Shell LSP + Auto-Heal",
+  "description": "Shell script intelligence for Claude Code, backed by bash-language-server, with an auto-heal layer on top: it runs shfmt after each edit and holds a turn open until shellcheck reports no errors. A bundled skill shows Claude how to use them together.",
+  "version": "1.0.0",
+  "author": {
+    "name": "DevOps",
+    "email": "sazzad@devops.bd"
+  },
+  "homepage": "https://devops.bd",
+  "repository": "https://github.com/devops-infinity/devops-lsp",
+  "license": "MIT",
+  "keywords": [
+    "shell",
+    "bash",
+    "sh",
+    "lsp",
+    "bash-language-server",
+    "shellcheck",
+    "shfmt",
+    "auto-fix",
+    "auto-heal",
+    "diagnostics",
+    "code-intelligence"
+  ],
+  "lspServers": "./.lsp.json"
+}

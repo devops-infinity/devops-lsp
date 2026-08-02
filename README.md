@@ -1,12 +1,13 @@
 # devops-lsp
 
-A small marketplace of Claude Code language-server plugins, kept under the DevOps brand. Add it once and Claude Code gets real code intelligence, plus an auto-heal layer, in every repo you open — a NestJS API, a Next.js app, a Cargo workspace, a Python service, or anything else built on TS/JS, Rust, or Python.
+A small marketplace of Claude Code language-server plugins, kept under the DevOps brand. Add it once and Claude Code gets real code intelligence, plus an auto-heal layer, in every repo you open — a NestJS API, a Next.js app, a Cargo workspace, a Python service, a pile of deploy scripts, or anything else built on TS/JS, Rust, Python, or shell.
 
-All three plugins follow the same shape. Each one wires up a language server so Claude resolves definitions, references, hovers, symbols, and call hierarchy from the type system instead of guessing from text. Each one adds an auto-heal layer: a fast formatter or fixer after every edit, and a whole-project check that won't let a turn end while errors remain. Each one bundles a skill that teaches Claude how to use the two together.
+All four plugins follow the same shape. Each one wires up a language server so Claude resolves definitions, references, hovers, symbols, and call hierarchy from the type system instead of guessing from text. Each one adds an auto-heal layer: a fast formatter or fixer after every edit, and a whole-project check that won't let a turn end while errors remain. Each one bundles a skill that teaches Claude how to use the two together.
 
 - `typescript-lsp` — `typescript-language-server`, with `eslint --fix` after edits and a `tsc --noEmit` gate.
 - `rust-lsp` — `rust-analyzer`, with `rustfmt` after edits and a `cargo clippy` gate.
 - `python-lsp` — `basedpyright`, with `ruff check --fix` and `ruff format` after edits and a `basedpyright` gate.
+- `shell-lsp` — `bash-language-server`, with `shfmt` after edits and a `shellcheck` gate.
 
 ## What you need installed
 
@@ -66,6 +67,25 @@ Nothing is needed per project to make the type check run. The formatter is delib
 
 **Why basedpyright and not stock pyright.** They are the same engine — basedpyright 1.39.9 is built on pyright 1.1.411 — but they ship differently. The `pyright` package on PyPI is a wrapper that downloads a Node runtime on first run, which fails on locked-down machines and in offline containers. basedpyright ships real wheels with the server and its runtime bundled, so `uv tool install` is the whole story. It also fixes pyright behaviors that only exist to serve the VS Code extension. If you prefer stock pyright, change `command` in `plugins/python-lsp/.lsp.json` to `pyright-langserver`; the settings block is compatible with both.
 
+### For shell-lsp
+
+The server from Bun, the two tools from Homebrew:
+
+```sh
+bun add -g bash-language-server@5.6.0
+brew install shellcheck shfmt
+```
+
+- `bash-language-server` is the server; it shells out to `shellcheck` for diagnostics, so both must be on your PATH.
+- `shfmt` backs the per-edit format hook. `shellcheck` also backs the Stop gate.
+- `jq` and `git` are needed by the hooks, same as the other plugins.
+
+Versions as of August 2nd 2026: bash-language-server 5.6.0, shellcheck 0.11.0, shfmt 3.13.1. On Debian or Ubuntu, `sudo apt-get install shellcheck shfmt`.
+
+Unlike the Python plugin, the formatter here runs on every shell file Claude edits rather than waiting for an opt-in config, because shell has no equivalent of a `[tool.ruff]` marker to look for. It stays out of your way a different way: `shfmt` reads `.editorconfig`, so a repo that declares `indent_style` or `indent_size` for `*.sh` keeps its own house style. Verified — with a 4-space `.editorconfig` the hook produces 4 spaces, not shfmt's default tab.
+
+**`.zsh` is deliberately unmapped.** shellcheck cannot parse zsh, so pointing the server at zsh files yields parse errors rather than findings. Zsh scripts are left alone entirely.
+
 ## Install
 
 Install the language server first (the "What you need installed" section above covers it), then add the marketplace and install the plugin. Both commands run at user scope by default, which is global: the plugin auto-loads in every project you open, so you set this up once per machine.
@@ -75,6 +95,7 @@ claude plugin marketplace add https://github.com/devops-infinity/devops-lsp
 claude plugin install typescript-lsp@devops-lsp
 claude plugin install rust-lsp@devops-lsp
 claude plugin install python-lsp@devops-lsp
+claude plugin install shell-lsp@devops-lsp
 ```
 
 Install only the ones you want — they're independent, and each stays quiet in projects of the other languages.
@@ -86,6 +107,7 @@ claude plugin list
 claude plugin details typescript-lsp@devops-lsp
 claude plugin details rust-lsp@devops-lsp
 claude plugin details python-lsp@devops-lsp
+claude plugin details shell-lsp@devops-lsp
 ```
 
 `claude plugin list` should show each plugin at `Scope: user`, enabled. `details` should report one LSP server, one skill, and two hooks per plugin. Keep the default scope — don't pass `--scope project` unless you want a plugin limited to a single repo, since they're built to be global.
@@ -94,7 +116,7 @@ If the LSP tool doesn't show up, set `ENABLE_LSP_TOOL=1` in your environment or 
 
 ## What Claude gets from it
 
-Claude Code's LSP tool exposes nine read-only operations, and these plugins make all of them work: go to definition, go to implementation, find references, hover, document symbols, workspace symbols, and call hierarchy (prepare, incoming, outgoing). The servers also push type and lint errors into Claude's context right after each edit, so Claude sees mistakes without being asked.
+Claude Code's LSP tool exposes nine read-only operations: go to definition, go to implementation, find references, hover, document symbols, workspace symbols, and call hierarchy (prepare, incoming, outgoing). The TypeScript, Rust, and Python servers support all nine — verified against each binary. The shell server supports six; it has no implementations or call hierarchy, because shell has no such structure to report. The servers also push diagnostics into Claude's context, so Claude sees mistakes without being asked.
 
 Two of those operations earn their keep especially well on Rust. `hover` reports the type the compiler inferred, which usually isn't written anywhere in the source — Rust elides most types, so this is information Claude cannot get by reading the file. And `go to implementation` finds every implementor of a trait, which are typically scattered across files that never name the trait, and which all break together when the trait changes.
 
@@ -127,6 +149,16 @@ The same three pieces again.
 - A `Stop` hook runs `basedpyright` across each touched project and blocks while any error remains. Like the Rust gate, it resolves projects from the changed files — `pyproject.toml`, `setup.py`, or `setup.cfg` — so a package nested in a monorepo is covered.
 
 One asymmetry worth knowing: the server runs in `openFilesOnly` mode, so it reports nothing about files Claude has not opened. A change that breaks a caller three modules away stays invisible until the gate runs. That keeps the live path fast and leaves whole-project truth to the gate, which is the same split the other two plugins use.
+
+### The shell side
+
+The same three pieces, with the shell tools.
+
+- A skill, `shell-autoheal`, tells Claude how to work on shell: quote every expansion, don't parse `ls`, know what `set -euo pipefail` does not cover, and never paper over a finding with a bare `# shellcheck disable=`.
+- A `PostToolUse` hook runs `shfmt --write` on each edited file, then reports anything shellcheck still finds. If `shfmt` fails, the file does not parse, and that error goes back to Claude.
+- A `Stop` hook runs `shellcheck` over the changed shell files and blocks while any `error`-level finding remains. Warnings and info are reported but do not block, matching the other gates.
+
+Its timeout is 120 seconds rather than 600, because shellcheck runs per file and is fast; there is no project-wide compile to wait on.
 
 ### One checker per job
 

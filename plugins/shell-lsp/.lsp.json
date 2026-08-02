@@ -1,0 +1,34 @@
+{
+  "shell": {
+    "command": "bash-language-server",
+    "args": ["start"],
+    "extensionToLanguage": {
+      ".sh": "shellscript",
+      ".bash": "shellscript",
+      ".bats": "shellscript"
+    },
+    "startupTimeout": 30000,
+    "maxRestarts": 3,
+    "settings": {
+      "bashIde": {
+        "shellcheckPath": "shellcheck",
+        "shellcheckArguments": [],
+        "enableSourceErrorDiagnostics": false,
+        "includeAllWorkspaceSymbols": true,
+        "backgroundAnalysisMaxFiles": 500,
+        "logLevel": "warning",
+        "shfmt": {
+          "path": "shfmt",
+          "languageDialect": "auto",
+          "ignoreEditorconfig": false,
+          "simplifyCode": false,
+          "caseIndent": false,
+          "binaryNextLine": false,
+          "funcNextLine": false,
+          "keepPadding": false,
+          "spaceRedirects": false
+        }
+      }
+    }
+  }
+}

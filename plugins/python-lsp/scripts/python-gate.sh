@@ -1,5 +1,11 @@
-#!/usr/bin/env bash
-set -uo pipefail
+#!/bin/sh
+set -u
+
+nl='
+'
+
+command -v jq >/dev/null 2>&1 || exit 0
+command -v git >/dev/null 2>&1 || exit 0
 
 input="$(cat)"
 active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null || echo false)"
@@ -7,16 +13,31 @@ active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null 
 
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-changed="$(cd "$root" && git status --porcelain 2>/dev/null |
-	sed -E 's/^.{3}//; s/^.* -> //; s/^"(.*)"$/\1/' | grep -E '\.pyi?$' || true)"
+list="$(mktemp)"
+errfile="$(mktemp)"
+trap 'rm -f "$list" "$errfile"' EXIT
+(cd "$root" && {
+	git diff --name-only -z
+	git diff --name-only --cached -z
+	git ls-files --others --exclude-standard -z
+} 2>/dev/null) | tr '\0' '\n' >"$list"
+
+changed=""
+while IFS= read -r rel; do
+	[ -n "$rel" ] || continue
+	[ -f "$root/$rel" ] || continue
+	case "$rel" in
+	*.py | *.pyi) changed="${changed}${rel}${nl}" ;;
+	esac
+done <"$list"
 [ -n "$changed" ] || exit 0
 
 command -v basedpyright >/dev/null 2>&1 || exit 0
 
-# Every Python project touched by a changed file. A project does not have to sit at the
-# git root, and one repo can hold several, so resolve them from the files themselves.
-projects="$(printf '%s\n' "$changed" | while IFS= read -r rel; do
-	dir="$root/$(dirname "$rel")"
+printf '%s' "$changed" >"$list"
+projects="$(while IFS= read -r rel; do
+	[ -n "$rel" ] || continue
+	dir="$root/$(dirname -- "$rel")"
 	[ -d "$dir" ] || continue
 	probe="$(cd "$dir" && pwd)"
 	while [ -n "$probe" ] && [ "$probe" != "/" ]; do
@@ -26,19 +47,17 @@ projects="$(printf '%s\n' "$changed" | while IFS= read -r rel; do
 				break 3
 			fi
 		done
-		probe="$(dirname "$probe")"
+		probe="$(dirname -- "$probe")"
 	done
-done | sort -u)"
+done <"$list" | sort -u)"
 [ -n "$projects" ] || exit 0
 
 errors=""
 broken=""
+printf '%s' "$projects" >"$list"
 while IFS= read -r proj; do
 	[ -n "$proj" ] || continue
 
-	# basedpyright looks for ./.venv relative to the project root and ignores
-	# VIRTUAL_ENV entirely. Without the right interpreter every third-party import
-	# resolves to nothing, and the file reads as broken when it is fine.
 	interp=""
 	for cand in "$proj/.venv/bin/python" "$proj/venv/bin/python" "$proj/.venv/Scripts/python.exe"; do
 		[ -x "$cand" ] && interp="$cand" && break
@@ -46,28 +65,25 @@ while IFS= read -r proj; do
 	[ -z "$interp" ] && [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ] && interp="$VIRTUAL_ENV/bin/python"
 
 	if [ -n "$interp" ]; then
-		out="$(cd "$proj" && basedpyright --outputjson --pythonpath "$interp" 2>/tmp/.devops-py-gate-err)"
+		out="$(cd "$proj" && basedpyright --outputjson --pythonpath "$interp" 2>"$errfile")"
 	else
-		out="$(cd "$proj" && basedpyright --outputjson 2>/tmp/.devops-py-gate-err)"
+		out="$(cd "$proj" && basedpyright --outputjson 2>"$errfile")"
 	fi
-	status=$?
-	err="$(cat /tmp/.devops-py-gate-err 2>/dev/null || true)"
-	rm -f /tmp/.devops-py-gate-err
+	rc=$?
+	err="$(cat "$errfile" 2>/dev/null || true)"
+	: >"$errfile"
 
-	# 0 clean, 1 diagnostics reported. Anything else means the run did not happen -
-	# 4 is "file or directory does not exist", and it writes ZERO bytes to stdout, so
-	# a pipeline that only reads stdout sees no errors and reports the project clean.
-	if [ "$status" -ge 2 ] || ! printf '%s' "$out" | jq -e 'has("summary")' >/dev/null 2>&1; then
-		broken="$broken- ${proj}: basedpyright exited ${status} without a usable report"$'\n'
-		[ -n "$err" ] && broken="$broken  ${err%%$'\n'*}"$'\n'
+	if [ "$rc" -ge 2 ] ||
+		# basedpyright exits 4 with zero bytes on stdout, which reads as a clean project
+		! printf '%s' "$out" | jq -e 'has("summary") and has("generalDiagnostics")' >/dev/null 2>&1; then
+		broken="${broken}- ${proj}: basedpyright exited ${rc} without a usable report${nl}"
+		[ -n "$err" ] && broken="${broken}  ${err%%"${nl}"*}${nl}"
 		continue
 	fi
 
-	# Config problems are reported on stderr with a zero or one exit and valid JSON on
-	# stdout, so a silently-ignored setting looks exactly like a healthy run.
 	case "$err" in
 	*"unrecognized setting"* | *'invalid "'* | *"could not be parsed"*)
-		broken="$broken- ${proj}: configuration was rejected, so the check ran with different settings than intended"$'\n'"  ${err%%$'\n'*}"$'\n'
+		broken="${broken}- ${proj}: configuration was rejected, so the check ran with different settings than intended${nl}  ${err%%"${nl}"*}${nl}"
 		;;
 	esac
 
@@ -76,10 +92,8 @@ while IFS= read -r proj; do
     | select(.severity == "error")
     | "\(.file):\((.range.start.line // 0) + 1):\((.range.start.character // 0) + 1): \(.message | split("\n")[0])"
   ' 2>/dev/null || true)"
-	[ -n "$found" ] && errors="$errors$found"$'\n'
-done <<EOF
-$projects
-EOF
+	[ -n "$found" ] && errors="${errors}${found}${nl}"
+done <"$list"
 
 errors="$(printf '%s' "$errors" | grep -v '^$' | awk '!seen[$0]++' || true)"
 
@@ -89,13 +103,13 @@ fi
 
 reason="devops-lsp Python gate:"
 if [ -n "$broken" ]; then
-	reason="$reason"$'\n'"The check did not complete for some projects. Treat these as unverified, not clean:"$'\n'"$broken"
+	reason="${reason}${nl}The check did not complete for some projects. Treat these as unverified, not clean:${nl}${broken}"
 fi
 if [ -n "$errors" ]; then
 	total="$(printf '%s\n' "$errors" | wc -l | tr -d ' ')"
 	shown="$(printf '%s\n' "$errors" | head -40)"
-	[ "$total" -gt 40 ] && shown="$shown"$'\n'"... $((total - 40)) more"
-	reason="$reason"$'\n'"basedpyright reported ${total} error(s). Fix them before finishing:"$'\n'"$shown"
+	[ "$total" -gt 40 ] && shown="${shown}${nl}... $((total - 40)) more"
+	reason="${reason}${nl}basedpyright reported ${total} error(s). Fix them before finishing:${nl}${shown}"
 fi
 
 jq -n --arg r "$reason" '{decision: "block", reason: $r}'

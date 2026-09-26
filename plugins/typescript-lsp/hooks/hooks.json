@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ts-autoheal.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ts-autoheal.sh",
+            "timeout": 30
           }
         ]
       }

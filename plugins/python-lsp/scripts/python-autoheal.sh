@@ -1,5 +1,10 @@
-#!/usr/bin/env bash
-set -uo pipefail
+#!/bin/sh
+set -u
+
+nl='
+'
+
+command -v jq >/dev/null 2>&1 || exit 0
 
 input="$(cat)"
 file="$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
@@ -10,10 +15,9 @@ case "$file" in
 esac
 [ -f "$file" ] || exit 0
 
-dir="$(cd "$(dirname "$file")" 2>/dev/null && pwd)" || exit 0
+dir="$(cd "$(dirname -- "$file")" 2>/dev/null && pwd)" || exit 0
 
-# Only touch projects that opted into ruff. Reformatting a repo that uses a different
-# formatter would rewrite files nobody asked us to rewrite.
+# only repos that opted into ruff; another formatter's repo must not be rewritten
 root=""
 probe="$dir"
 while [ -n "$probe" ] && [ "$probe" != "/" ]; do
@@ -24,20 +28,25 @@ while [ -n "$probe" ] && [ "$probe" != "/" ]; do
 		root="$probe"
 		break
 	fi
-	probe="$(dirname "$probe")"
+	probe="$(dirname -- "$probe")"
 done
 [ -n "$root" ] || exit 0
 
 command -v ruff >/dev/null 2>&1 || exit 0
 
-# --fix first (import order, unused imports, simple rewrites), then format.
 (cd "$root" && ruff check --fix --quiet --no-cache "$file" >/dev/null 2>&1 || true)
 (cd "$root" && ruff format --quiet --no-cache "$file" >/dev/null 2>&1 || true)
 
-# Whatever ruff could not fix is still worth reporting.
-left="$(cd "$root" && ruff check --quiet --no-cache --output-format concise "$file" 2>&1 || true)"
-[ -n "$left" ] || exit 0
+left="$(cd "$root" && ruff check --quiet --no-cache --output-format concise "$file" 2>&1)"
+rc=$?
 
-ctx="devops-lsp auto-heal ran 'ruff check --fix' and 'ruff format' on ${file}. Unresolved lint output below; address it:"$'\n'"$left"
+if [ "$rc" -ge 2 ]; then
+	ctx="devops-lsp auto-heal ran 'ruff check --fix' and 'ruff format' on ${file}, and ruff could not run (exit ${rc}). This is a tool or config problem, not a lint finding:${nl}${left}"
+	jq -n --arg c "$ctx" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $c}}'
+	exit 0
+fi
+[ "$rc" -eq 1 ] && [ -n "$left" ] || exit 0
+
+ctx="devops-lsp auto-heal ran 'ruff check --fix' and 'ruff format' on ${file}. Unresolved lint output below; address it:${nl}${left}"
 jq -n --arg c "$ctx" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $c}}'
 exit 0

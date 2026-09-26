@@ -1,5 +1,11 @@
-#!/usr/bin/env bash
-set -uo pipefail
+#!/bin/sh
+set -u
+
+nl='
+'
+
+command -v jq >/dev/null 2>&1 || exit 0
+command -v git >/dev/null 2>&1 || exit 0
 
 input="$(cat)"
 active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null || echo false)"
@@ -7,12 +13,34 @@ active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null 
 
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-changed="$(cd "$root" && git status --porcelain 2>/dev/null |
-	sed -E 's/^.{3}//; s/^.* -> //; s/^"(.*)"$/\1/' | grep -E '\.(php|phtml)$' | grep -v '\.blade\.php$' || true)"
+list="$(mktemp)"
+errfile="$(mktemp)"
+trap 'rm -f "$list" "$errfile"' EXIT
+(cd "$root" && {
+	git diff --name-only -z
+	git diff --name-only --cached -z
+	git ls-files --others --exclude-standard -z
+} 2>/dev/null) | tr '\0' '\n' >"$list"
+
+changed=""
+while IFS= read -r rel; do
+	[ -n "$rel" ] || continue
+	[ -f "$root/$rel" ] || continue
+	case "$rel" in
+	*.php | *.phtml)
+		case "$rel" in
+		*.blade.php) continue ;;
+		esac
+		changed="${changed}${rel}${nl}"
+		;;
+	esac
+done <"$list"
 [ -n "$changed" ] || exit 0
 
-projects="$(printf '%s\n' "$changed" | while IFS= read -r rel; do
-	dir="$root/$(dirname "$rel")"
+printf '%s' "$changed" >"$list"
+projects="$(while IFS= read -r rel; do
+	[ -n "$rel" ] || continue
+	dir="$root/$(dirname -- "$rel")"
 	[ -d "$dir" ] || continue
 	probe="$(cd "$dir" && pwd)"
 	while [ -n "$probe" ] && [ "$probe" != "/" ]; do
@@ -20,13 +48,14 @@ projects="$(printf '%s\n' "$changed" | while IFS= read -r rel; do
 			printf '%s\n' "$probe"
 			break
 		fi
-		probe="$(dirname "$probe")"
+		probe="$(dirname -- "$probe")"
 	done
-done | sort -u)"
+done <"$list" | sort -u)"
 [ -n "$projects" ] || exit 0
 
 errors=""
 broken=""
+printf '%s' "$projects" >"$list"
 while IFS= read -r proj; do
 	[ -n "$proj" ] || continue
 
@@ -38,23 +67,21 @@ while IFS= read -r proj; do
 	fi
 	[ -n "$phpstan" ] || continue
 
-	# Without a config file PHPStan silently runs at level 0 and exits 0 on almost
-	# anything, which reads as a clean project. Pass a real level instead, and say so.
 	level_note=""
 	if [ -f "$proj/phpstan.neon" ] || [ -f "$proj/phpstan.neon.dist" ] || [ -f "$proj/phpstan.dist.neon" ]; then
-		out="$(cd "$proj" && "$phpstan" analyse --error-format=json --no-progress --no-interaction --memory-limit=2G 2>/tmp/.devops-php-gate-err)"
+		out="$(cd "$proj" && "$phpstan" analyse --error-format=json --no-progress --no-interaction --memory-limit=2G 2>"$errfile")"
 	else
-		out="$(cd "$proj" && "$phpstan" analyse --level=5 --error-format=json --no-progress --no-interaction --memory-limit=2G . 2>/tmp/.devops-php-gate-err)"
+		out="$(cd "$proj" && "$phpstan" analyse --level=5 --error-format=json --no-progress --no-interaction --memory-limit=2G . 2>"$errfile")"
 		level_note=" (no phpstan.neon found, ran at level 5)"
 	fi
-	status=$?
-	err="$(cat /tmp/.devops-php-gate-err 2>/dev/null || true)"
-	rm -f /tmp/.devops-php-gate-err
+	rc=$?
+	err="$(cat "$errfile" 2>/dev/null || true)"
+	: >"$errfile"
 
-	# Exit 1 means either real findings or a setup failure, so the JSON decides.
+	# PHPStan exits 1 for findings and for a setup failure alike, so the JSON decides
 	if ! printf '%s' "$out" | jq -e 'has("totals")' >/dev/null 2>&1; then
-		broken="$broken- ${proj}: PHPStan exited ${status} without a usable report"$'\n'
-		[ -n "$err" ] && broken="$broken  $(printf '%s' "$err" | head -n1)"$'\n'
+		broken="${broken}- ${proj}: PHPStan exited ${rc} without a usable report${nl}"
+		[ -n "$err" ] && broken="${broken}  $(printf '%s' "$err" | head -n1)${nl}"
 		continue
 	fi
 
@@ -66,11 +93,9 @@ while IFS= read -r proj; do
   ' 2>/dev/null || true)"
 	general="$(printf '%s' "$out" | jq -r '(.errors // [])[]' 2>/dev/null || true)"
 
-	[ -n "$found" ] && errors="$errors$found$level_note"$'\n'
-	[ -n "$general" ] && errors="$errors$general"$'\n'
-done <<EOF
-$projects
-EOF
+	[ -n "$found" ] && errors="${errors}${found}${level_note}${nl}"
+	[ -n "$general" ] && errors="${errors}${general}${nl}"
+done <"$list"
 
 errors="$(printf '%s' "$errors" | grep -v '^$' | awk '!seen[$0]++' || true)"
 
@@ -80,13 +105,13 @@ fi
 
 reason="devops-lsp PHP gate:"
 if [ -n "$broken" ]; then
-	reason="$reason"$'\n'"The check did not complete for some projects. Treat these as unverified, not clean:"$'\n'"$broken"
+	reason="${reason}${nl}The check did not complete for some projects. Treat these as unverified, not clean:${nl}${broken}"
 fi
 if [ -n "$errors" ]; then
 	total="$(printf '%s\n' "$errors" | wc -l | tr -d ' ')"
 	shown="$(printf '%s\n' "$errors" | head -40)"
-	[ "$total" -gt 40 ] && shown="$shown"$'\n'"... $((total - 40)) more"
-	reason="$reason"$'\n'"PHPStan reported ${total} error(s). Fix them before finishing:"$'\n'"$shown"
+	[ "$total" -gt 40 ] && shown="${shown}${nl}... $((total - 40)) more"
+	reason="${reason}${nl}PHPStan reported ${total} error(s). Fix them before finishing:${nl}${shown}"
 fi
 
 jq -n --arg r "$reason" '{decision: "block", reason: $r}'

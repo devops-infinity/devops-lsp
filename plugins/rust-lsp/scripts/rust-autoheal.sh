@@ -1,5 +1,10 @@
-#!/usr/bin/env bash
-set -uo pipefail
+#!/bin/sh
+set -u
+
+nl='
+'
+
+command -v jq >/dev/null 2>&1 || exit 0
 
 input="$(cat)"
 file="$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
@@ -10,12 +15,9 @@ case "$file" in
 esac
 [ -f "$file" ] || exit 0
 
-dir="$(cd "$(dirname "$file")" 2>/dev/null && pwd)" || exit 0
+dir="$(cd "$(dirname -- "$file")" 2>/dev/null && pwd)" || exit 0
 
-# Reads the filesystem only - it never runs rustup, cargo, or rustfmt. Every one of
-# those resolves the active toolchain from the working directory, so inside a project
-# pinned to an uninstalled toolchain any of them makes rustup download it on the spot:
-# gigabytes, silently, inside a hook. That includes `rustup toolchain list`.
+# reads the filesystem only: calling rustup here would download a pinned toolchain
 pin_blocked() {
 	rustup_home="${RUSTUP_HOME:-$HOME/.rustup}"
 	[ -d "$rustup_home/toolchains" ] || return 1
@@ -25,7 +27,6 @@ pin_blocked() {
 			[ -f "$probe/$pin" ] || continue
 			channel="$(grep -m1 -E '^[[:space:]]*channel[[:space:]]*=' "$probe/$pin" 2>/dev/null |
 				sed -E 's/.*=[[:space:]]*"?([^"[:space:]]+)"?.*/\1/' || true)"
-			# The legacy `rust-toolchain` file is a bare channel name, not TOML.
 			if [ -z "$channel" ] && [ "$pin" = "rust-toolchain" ]; then
 				channel="$(head -n1 "$probe/$pin" 2>/dev/null | tr -d '[:space:]')"
 			fi
@@ -35,7 +36,7 @@ pin_blocked() {
 			done
 			return 0
 		done
-		probe="$(dirname "$probe")"
+		probe="$(dirname -- "$probe")"
 	done
 	return 1
 }
@@ -51,19 +52,20 @@ while [ -n "$probe" ] && [ "$probe" != "/" ]; do
 				sed -E 's/.*"([0-9]{4})".*/\1/' || true)"
 		fi
 	fi
-	probe="$(dirname "$probe")"
+	probe="$(dirname -- "$probe")"
 done
 [ -n "$manifest" ] || exit 0
-[ -n "$edition" ] || edition="2021"
+[ -n "$edition" ] || edition="2015"
 
 pin_blocked "$dir" && exit 0
 
-# Probe from / so the probe itself cannot resolve a pinned toolchain.
 (cd / && rustfmt --version >/dev/null 2>&1) || exit 0
 
-out="$(cd "$dir" && rustfmt --edition "$edition" --color never "$file" 2>&1 || true)"
+out="$(cd "$dir" && rustfmt --edition "$edition" --color never "$file" 2>&1)"
+rc=$?
+[ "$rc" -ne 0 ] || exit 0
 [ -n "$out" ] || exit 0
 
-ctx="devops-lsp auto-heal ran 'rustfmt --edition ${edition}' on ${file} and it did not format cleanly. Usually this means the file does not parse. Fix it:"$'\n'"$out"
+ctx="devops-lsp auto-heal ran 'rustfmt --edition ${edition}' on ${file} and it did not format cleanly. Usually this means the file does not parse. Fix it:${nl}${out}"
 jq -n --arg c "$ctx" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $c}}'
 exit 0

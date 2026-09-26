@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "yaml-lsp",
+  "displayName": "YAML LSP + Auto-Heal",
+  "description": "YAML intelligence for Claude Code, backed by the Red Hat YAML language server, with an auto-heal layer on top: Prettier formats each edited file, and a yamllint check script verifies the whole project. A bundled skill shows Claude how to use them together.",
+  "version": "1.0.0",
+  "author": {
+    "name": "DevOps",
+    "email": "sazzad@devops.bd"
+  },
+  "homepage": "https://devops.bd",
+  "repository": "https://github.com/devops-infinity/devops-lsp",
+  "license": "MIT",
+  "keywords": [
+    "yaml",
+    "yml",
+    "lsp",
+    "schema",
+    "json-schema",
+    "yamllint",
+    "prettier",
+    "auto-fix",
+    "auto-heal",
+    "diagnostics",
+    "code-intelligence"
+  ],
+  "lspServers": "./.lsp.json"
+}

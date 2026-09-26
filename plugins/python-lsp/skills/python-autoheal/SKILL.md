@@ -5,7 +5,7 @@ description: Auto-heal Python after edits. Use when editing, refactoring, or rev
 
 # Python auto-heal
 
-You have a Python language server (basedpyright), and it's read-only. It can look things up — goToDefinition, goToImplementation, findReferences, hover, documentSymbol, workspaceSymbol, and call hierarchy — and it reports type errors for the files you have open. What it can't do is change code: no quick fixes, no rename, no organize-imports, no formatting. You do the fixing with the command-line tools below.
+You have a Python language server (basedpyright), and it's read-only. It can look things up (goToDefinition, goToImplementation, findReferences, hover, documentSymbol, workspaceSymbol, and call hierarchy), and it reports type errors for the files you have open. What it can't do is change code: no quick fixes, no rename, no organize-imports, no formatting. You do the fixing with the command-line tools below.
 
 The server is set to `openFilesOnly`, so it says nothing about files you haven't touched. A change that breaks a caller three modules away will not show up until you check the project. Run the check yourself rather than waiting to be told.
 
@@ -15,10 +15,10 @@ The server is set to `openFilesOnly`, so it says nothing about files you haven't
 - Use goToDefinition to read a class or function instead of guessing its shape from how it's called.
 - Before you change a function signature, a class attribute, or anything exported from a module, run findReferences. Python resolves names at runtime, so the compiler will not catch a caller you forgot.
 
-## After you edit, fix it — don't just report it
+## After you edit, fix it: don't just report it
 
 - Lint and formatting are already handled. A PostToolUse hook runs `ruff check --fix` and then `ruff format` on each file you edit, and hands back whatever ruff could not fix. It only fires in projects that opted into ruff.
-- Run `basedpyright` for the real check. It covers the whole project, not just open files, and it is what the Stop gate runs.
+- Run `basedpyright` for the real check. It covers the whole project, not just the open files that `openFilesOnly` mode reports on.
 - For each error, follow the types back with hover and goToDefinition to where the mismatch starts, fix it there, and run the check again.
 
 ## Fix the cause, not the symptom
@@ -32,4 +32,4 @@ The server is set to `openFilesOnly`, so it says nothing about files you haven't
 
 `basedpyright` reports no errors and `ruff check` is clean on the files you touched.
 
-**Nothing checks this for you.** There is no gate at the end of the turn, and the server only reports on files you opened — a caller you broke three modules away is invisible. Run `basedpyright` over the project yourself and treat its output as the verdict.
+**Nothing checks this for you.** There is no gate at the end of the turn, and the server only reports on files you opened: a caller you broke three modules away is invisible. Run `basedpyright` over the project yourself and treat its output as the verdict.

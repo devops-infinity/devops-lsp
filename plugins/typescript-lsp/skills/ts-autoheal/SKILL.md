@@ -5,14 +5,14 @@ description: Auto-heal TypeScript and JavaScript after edits. Use when editing, 
 
 # TypeScript / JavaScript auto-heal
 
-You have a TypeScript/JavaScript language server, and it's read-only. It can look things up — goToDefinition, goToImplementation, findReferences, hover, documentSymbol, workspaceSymbol, and call hierarchy — and it pushes type and lint errors into your context right after each edit. What it can't do is change code: no quick fixes, no rename, no organize-imports, no formatting. You do the fixing with the command-line tools below.
+You have a TypeScript/JavaScript language server, and it's read-only. It can look things up (goToDefinition, goToImplementation, findReferences, hover, documentSymbol, workspaceSymbol, and call hierarchy), and it pushes type and lint errors into your context right after each edit. What it can't do is change code: no quick fixes, no rename, no organize-imports, no formatting. You do the fixing with the command-line tools below.
 
 ## Before you edit
 
 - Look a symbol up with goToDefinition or documentSymbol instead of guessing its shape.
 - Before you touch an exported signature, type, or interface, run findReferences (and incomingCalls for functions) so you know every call site that has to change.
 
-## After you edit, fix it — don't just report it
+## After you edit, fix it: don't just report it
 
 Work through the changed files and repeat until they're clean:
 
@@ -25,4 +25,4 @@ Work through the changed files and repeat until they're clean:
 
 `tsc --noEmit` comes back clean and `eslint` has nothing left to report on the changed files.
 
-**Nothing checks this for you.** There is no gate at the end of the turn — if you skip the type-check, broken code ships and nobody is told. Run `tsc --noEmit` yourself before you say the work is done, and treat its output as the verdict.
+**Nothing checks this for you.** There is no gate at the end of the turn: if you skip the type-check, broken code ships and nobody is told. Run `tsc --noEmit` yourself before you say the work is done, and treat its output as the verdict.

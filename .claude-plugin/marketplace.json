@@ -5,12 +5,12 @@
     "name": "DevOps",
     "email": "sazzad@devops.bd"
   },
-  "description": "A DevOps marketplace of Claude Code language-server plugins. Add it once and use the same TypeScript, JavaScript, Rust, Python, shell, and PHP support in every project.",
+  "description": "A DevOps marketplace of Claude Code language-server plugins. Add it once and use the same TypeScript, JavaScript, Rust, Python, shell, PHP, JSON, and YAML support in every project.",
   "plugins": [
     {
       "name": "typescript-lsp",
       "source": "./plugins/typescript-lsp",
-      "description": "TypeScript and JavaScript code intelligence, plus auto-heal: eslint --fix after edits and a tsc --noEmit gate before a turn can end.",
+      "description": "TypeScript and JavaScript code intelligence, plus auto-heal: eslint --fix after edits and a tsc --noEmit check script.",
       "version": "1.0.0",
       "author": {
         "name": "DevOps",
@@ -21,7 +21,7 @@
     {
       "name": "rust-lsp",
       "source": "./plugins/rust-lsp",
-      "description": "Rust code intelligence, plus auto-heal: rustfmt after edits and a cargo clippy gate before a turn can end.",
+      "description": "Rust code intelligence, plus auto-heal: rustfmt after edits and a cargo clippy check script.",
       "version": "1.0.0",
       "author": {
         "name": "DevOps",
@@ -32,7 +32,7 @@
     {
       "name": "python-lsp",
       "source": "./plugins/python-lsp",
-      "description": "Python code intelligence, plus auto-heal: ruff check --fix and ruff format after edits and a basedpyright gate before a turn can end.",
+      "description": "Python code intelligence, plus auto-heal: ruff check --fix and ruff format after edits and a basedpyright check script.",
       "version": "1.0.0",
       "author": {
         "name": "DevOps",
@@ -43,7 +43,7 @@
     {
       "name": "shell-lsp",
       "source": "./plugins/shell-lsp",
-      "description": "Shell script code intelligence, plus auto-heal: shfmt after edits and a shellcheck gate before a turn can end.",
+      "description": "Shell script code intelligence, plus auto-heal: shellcheck fixes and shfmt after edits, plus a shellcheck check script.",
       "version": "1.0.0",
       "author": {
         "name": "DevOps",
@@ -54,7 +54,29 @@
     {
       "name": "php-lsp",
       "source": "./plugins/php-lsp",
-      "description": "PHP code intelligence, plus auto-heal: php -l and the project's formatter after edits and a PHPStan gate before a turn can end.",
+      "description": "PHP code intelligence, plus auto-heal: php -l and the project's formatter after edits and a PHPStan check script.",
+      "version": "1.0.0",
+      "author": {
+        "name": "DevOps",
+        "email": "sazzad@devops.bd"
+      },
+      "category": "development"
+    },
+    {
+      "name": "json-lsp",
+      "source": "./plugins/json-lsp",
+      "description": "JSON and JSONC code intelligence, plus auto-heal: Prettier after edits and a prettier --check script.",
+      "version": "1.0.0",
+      "author": {
+        "name": "DevOps",
+        "email": "sazzad@devops.bd"
+      },
+      "category": "development"
+    },
+    {
+      "name": "yaml-lsp",
+      "source": "./plugins/yaml-lsp",
+      "description": "YAML code intelligence, plus auto-heal: Prettier after edits and a yamllint check script.",
       "version": "1.0.0",
       "author": {
         "name": "DevOps",

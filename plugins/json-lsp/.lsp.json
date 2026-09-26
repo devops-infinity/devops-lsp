@@ -1,0 +1,47 @@
+{
+  "json": {
+    "command": "vscode-json-language-server",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".json": "json",
+      ".jsonc": "jsonc"
+    },
+    "startupTimeout": 60000,
+    "maxRestarts": 3,
+    "initializationOptions": {
+      "provideFormatter": true,
+      "handledSchemaProtocols": ["file", "http", "https"]
+    },
+    "settings": {
+      "json": {
+        "validate": { "enable": true },
+        "format": { "enable": true },
+        "schemas": [
+          {
+            "fileMatch": ["package.json"],
+            "url": "https://www.schemastore.org/package.json"
+          },
+          {
+            "fileMatch": ["tsconfig.json", "tsconfig.*.json"],
+            "url": "https://www.schemastore.org/tsconfig.json"
+          },
+          {
+            "fileMatch": ["jsconfig.json", "jsconfig.*.json"],
+            "url": "https://www.schemastore.org/jsconfig.json"
+          },
+          {
+            "fileMatch": ["composer.json"],
+            "url": "https://getcomposer.org/schema.json"
+          },
+          {
+            "fileMatch": [".eslintrc", ".eslintrc.json"],
+            "url": "https://www.schemastore.org/eslintrc.json"
+          }
+        ]
+      },
+      "http": {
+        "proxyStrictSSL": true
+      }
+    }
+  }
+}

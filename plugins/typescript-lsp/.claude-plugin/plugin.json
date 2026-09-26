@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "typescript-lsp",
   "displayName": "TypeScript / JavaScript LSP + Auto-Heal",
-  "description": "TypeScript and JavaScript intelligence for Claude Code, backed by typescript-language-server, with an auto-heal layer on top: it runs eslint --fix after each edit and holds a turn open until tsc --noEmit passes. A bundled skill shows Claude how to use them together.",
+  "description": "TypeScript and JavaScript intelligence for Claude Code, backed by typescript-language-server, with an auto-heal layer on top: it runs eslint --fix after each edit and ships a tsc --noEmit check script. A bundled skill shows Claude how to use them together.",
   "version": "1.0.0",
   "author": {
     "name": "DevOps",

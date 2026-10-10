@@ -1,116 +1,139 @@
 #!/bin/sh
+# Whole-project basedpyright gate: block with the errors it reports; a run that cannot happen is never read as a pass.
 set -u
 
-nl='
+newline='
 '
 
 command -v jq >/dev/null 2>&1 || exit 0
 command -v git >/dev/null 2>&1 || exit 0
 
-input="$(cat)"
-active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null || echo false)"
-[ "$active" = "true" ] && exit 0
+if [ -t 0 ]; then
+	printf 'usage: echo ...hook JSON... | %s\n' "$0" >&2
+	exit 0
+fi
 
-root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+block_with_reason() {
+	jq -n --arg reason "$1" '{decision: "block", reason: $reason}'
+}
 
-list="$(mktemp)"
-errfile="$(mktemp)"
-trap 'rm -f "$list" "$errfile"' EXIT
-(cd "$root" && {
-	git diff --name-only -z
-	git diff --name-only --cached -z
-	git ls-files --others --exclude-standard -z
-} 2>/dev/null) | tr '\0' '\n' >"$list"
+hook_input="$(cat)"
+stop_hook_active="$(printf '%s' "$hook_input" | jq -r '.stop_hook_active // false' 2>/dev/null || echo false)"
+[ "$stop_hook_active" = "true" ] && exit 0
 
-changed=""
-while IFS= read -r rel; do
-	[ -n "$rel" ] || continue
-	[ -f "$root/$rel" ] || continue
-	case "$rel" in
-	*.py | *.pyi) changed="${changed}${rel}${nl}" ;;
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+git_nul_file="$(mktemp)" || exit 0
+scratch_file="$(mktemp)" || exit 0
+stderr_file="$(mktemp)" || exit 0
+trap 'rm -f "$git_nul_file" "$scratch_file" "$stderr_file"' EXIT HUP INT TERM
+
+if ! (cd "$repo_root" && {
+	git diff --name-only -z || exit 1
+	git diff --name-only --cached -z || exit 1
+	git ls-files --others --exclude-standard -z || exit 1
+} 2>/dev/null) >"$git_nul_file"; then
+	block_with_reason "devops-lsp Python gate: git could not list the changed files, so the check did not happen. Treat this as unverified, not clean."
+	exit 0
+fi
+# POSIX sh has no NUL-safe string handling; filenames containing a newline are outside this line protocol
+tr '\0' '\n' <"$git_nul_file" >"$scratch_file"
+
+changed_files=""
+while IFS= read -r rel_path; do
+	[ -n "$rel_path" ] || continue
+	[ -f "$repo_root/$rel_path" ] || continue
+	case "$rel_path" in
+	*.py | *.pyi) changed_files="${changed_files}${rel_path}${newline}" ;;
 	esac
-done <"$list"
-[ -n "$changed" ] || exit 0
+done <"$scratch_file"
+[ -n "$changed_files" ] || exit 0
 
 command -v basedpyright >/dev/null 2>&1 || exit 0
 
-printf '%s' "$changed" >"$list"
-projects="$(while IFS= read -r rel; do
-	[ -n "$rel" ] || continue
-	dir="$root/$(dirname -- "$rel")"
-	[ -d "$dir" ] || continue
-	probe="$(cd "$dir" && pwd)"
-	while [ -n "$probe" ] && [ "$probe" != "/" ]; do
+printf '%s' "$changed_files" >"$scratch_file"
+project_dirs="$(while IFS= read -r rel_path; do
+	[ -n "$rel_path" ] || continue
+	file_dir="$repo_root/$(dirname -- "$rel_path")"
+	[ -d "$file_dir" ] || continue
+	walk_dir="$(cd "$file_dir" && pwd)"
+	while [ -n "$walk_dir" ] && [ "$walk_dir" != "/" ]; do
 		for marker in pyproject.toml setup.py setup.cfg; do
-			if [ -f "$probe/$marker" ]; then
-				printf '%s\n' "$probe"
-				break 3
+			if [ -f "$walk_dir/$marker" ]; then
+				printf '%s\n' "$walk_dir"
+				break 2
 			fi
 		done
-		probe="$(dirname -- "$probe")"
+		walk_dir="$(dirname -- "$walk_dir")"
 	done
-done <"$list" | sort -u)"
-[ -n "$projects" ] || exit 0
+done <"$scratch_file" | sort -u)"
+[ -n "$project_dirs" ] || exit 0
 
-errors=""
-broken=""
-printf '%s' "$projects" >"$list"
-while IFS= read -r proj; do
-	[ -n "$proj" ] || continue
+error_lines=""
+unverified=""
+# the trailing newline matters: command substitution strips it, and a final unterminated line is dropped by read
+printf '%s\n' "$project_dirs" >"$scratch_file"
+while IFS= read -r project_dir; do
+	[ -n "$project_dir" ] || continue
 
-	interp=""
-	for cand in "$proj/.venv/bin/python" "$proj/venv/bin/python" "$proj/.venv/Scripts/python.exe"; do
-		[ -x "$cand" ] && interp="$cand" && break
+	venv_python=""
+	for candidate in "$project_dir/.venv/bin/python" "$project_dir/venv/bin/python" "$project_dir/.venv/Scripts/python.exe"; do
+		[ -x "$candidate" ] && venv_python="$candidate" && break
 	done
-	[ -z "$interp" ] && [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ] && interp="$VIRTUAL_ENV/bin/python"
-
-	if [ -n "$interp" ]; then
-		out="$(cd "$proj" && basedpyright --outputjson --pythonpath "$interp" 2>"$errfile")"
-	else
-		out="$(cd "$proj" && basedpyright --outputjson 2>"$errfile")"
+	if [ -z "$venv_python" ] && [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ]; then
+		# an inherited VIRTUAL_ENV belongs to this project only when it lives under it
+		case "$VIRTUAL_ENV" in
+		"$project_dir"/*) venv_python="$VIRTUAL_ENV/bin/python" ;;
+		esac
 	fi
-	rc=$?
-	err="$(cat "$errfile" 2>/dev/null || true)"
-	: >"$errfile"
 
-	if [ "$rc" -ge 2 ] ||
+	if [ -n "$venv_python" ]; then
+		pyright_json="$(cd "$project_dir" && basedpyright --outputjson --pythonpath "$venv_python" </dev/null 2>"$stderr_file")"
+	else
+		pyright_json="$(cd "$project_dir" && basedpyright --outputjson </dev/null 2>"$stderr_file")"
+	fi
+	pyright_exit=$?
+	stderr_text="$(cat "$stderr_file" 2>/dev/null || true)"
+	: >"$stderr_file"
+
+	if [ "$pyright_exit" -ge 2 ] ||
 		# basedpyright exits 4 with zero bytes on stdout, which reads as a clean project
-		! printf '%s' "$out" | jq -e 'has("summary") and has("generalDiagnostics")' >/dev/null 2>&1; then
-		broken="${broken}- ${proj}: basedpyright exited ${rc} without a usable report${nl}"
-		[ -n "$err" ] && broken="${broken}  ${err%%"${nl}"*}${nl}"
+		! printf '%s' "$pyright_json" | jq -e 'has("summary") and has("generalDiagnostics")' >/dev/null 2>&1; then
+		unverified="${unverified}- ${project_dir}: basedpyright exited ${pyright_exit} without a usable report${newline}"
+		[ -n "$stderr_text" ] && unverified="${unverified}  ${stderr_text%%"${newline}"*}${newline}"
 		continue
 	fi
 
-	case "$err" in
+	case "$stderr_text" in
 	*"unrecognized setting"* | *'invalid "'* | *"could not be parsed"*)
-		broken="${broken}- ${proj}: configuration was rejected, so the check ran with different settings than intended${nl}  ${err%%"${nl}"*}${nl}"
+		unverified="${unverified}- ${project_dir}: configuration was rejected, so the check ran with different settings than intended${newline}  ${stderr_text%%"${newline}"*}${newline}"
 		;;
 	esac
 
-	found="$(printf '%s' "$out" | jq -r '
-    (.generalDiagnostics // [])[]
-    | select(.severity == "error")
-    | "\(.file):\((.range.start.line // 0) + 1):\((.range.start.character // 0) + 1): \(.message | split("\n")[0])"
-  ' 2>/dev/null || true)"
-	[ -n "$found" ] && errors="${errors}${found}${nl}"
-done <"$list"
+	file_errors="$(printf '%s' "$pyright_json" | jq -r '
+		(.generalDiagnostics // [])[]
+		| select(.severity == "error")
+		| "\(.file):\((.range.start.line // 0) + 1):\((.range.start.character // 0) + 1): \(.message | split("\n")[0])"
+	' 2>/dev/null || true)"
+	[ -n "$file_errors" ] && error_lines="${error_lines}${file_errors}${newline}"
+done <"$scratch_file"
 
-errors="$(printf '%s' "$errors" | grep -v '^$' | awk '!seen[$0]++' || true)"
+error_lines="$(printf '%s' "$error_lines" | grep -v '^$' | awk '!seen[$0]++' || true)"
 
-if [ -z "$errors" ] && [ -z "$broken" ]; then
+if [ -z "$error_lines" ] && [ -z "$unverified" ]; then
 	exit 0
 fi
 
 reason="devops-lsp Python gate:"
-if [ -n "$broken" ]; then
-	reason="${reason}${nl}The check did not complete for some projects. Treat these as unverified, not clean:${nl}${broken}"
+if [ -n "$unverified" ]; then
+	reason="${reason}${newline}The check did not complete for some projects. Treat these as unverified, not clean:${newline}${unverified}"
 fi
-if [ -n "$errors" ]; then
-	total="$(printf '%s\n' "$errors" | wc -l | tr -d ' ')"
-	shown="$(printf '%s\n' "$errors" | head -40)"
-	[ "$total" -gt 40 ] && shown="${shown}${nl}... $((total - 40)) more"
-	reason="${reason}${nl}basedpyright reported ${total} error(s). Fix them before finishing:${nl}${shown}"
+if [ -n "$error_lines" ]; then
+	error_total="$(printf '%s\n' "$error_lines" | wc -l | tr -d ' ')"
+	shown_errors="$(printf '%s\n' "$error_lines" | head -n 40)"
+	[ "$error_total" -gt 40 ] && shown_errors="${shown_errors}${newline}... $((error_total - 40)) more"
+	reason="${reason}${newline}basedpyright reported ${error_total} error(s). Fix them before finishing:${newline}${shown_errors}"
 fi
 
-jq -n --arg r "$reason" '{decision: "block", reason: $r}'
+block_with_reason "$reason"
 exit 0

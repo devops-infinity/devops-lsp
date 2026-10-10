@@ -2,7 +2,7 @@
 
 TypeScript and JavaScript support for Claude Code, part of the `devops-lsp` marketplace.
 
-It runs `typescript-language-server` for code intelligence and adds an auto-heal layer: `eslint --fix` after edits, and a `tsc --noEmit` gate script the bundled skill runs over the whole project.
+It runs `typescript-language-server` for code intelligence and adds a notify-only layer: an `eslint` check after each edit reports the findings without changing the file, and a `tsc --noEmit` gate script the bundled skill runs over the whole project. Nothing is ever fixed or formatted automatically.
 
 Install the tools, then the plugin:
 

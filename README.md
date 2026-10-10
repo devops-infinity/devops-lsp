@@ -2,15 +2,15 @@
 
 A Claude Code plugin marketplace for TypeScript, JavaScript, Rust, Python, shell, and PHP language servers.
 
-Add it once and every repository you open gets code intelligence from a real language server, plus an auto-heal layer that formats each edit and runs a whole-project check. The plugins are independent, so you install only the languages you use.
+Add it once and every repository you open gets code intelligence from a real language server, plus a notify layer that checks each edit and reports what it finds. Nothing is ever fixed or formatted automatically: the plugins surface failures, and the fixing stays with you and Claude. The plugins are independent, so you install only the languages you use.
 
-- [`typescript-lsp`](plugins/typescript-lsp/README.md): `typescript-language-server`, with `eslint --fix` after edits and a `tsc --noEmit` gate.
-- [`rust-lsp`](plugins/rust-lsp/README.md): `rust-analyzer`, with `rustfmt` after edits and a `cargo clippy` gate.
-- [`python-lsp`](plugins/python-lsp/README.md): `basedpyright`, with `ruff check --fix` and `ruff format` after edits and a `basedpyright` gate.
-- [`shell-lsp`](plugins/shell-lsp/README.md): `bash-language-server`, with `shfmt` after edits and a `shellcheck` gate.
-- [`php-lsp`](plugins/php-lsp/README.md): `intelephense`, with `php -l` plus a formatter after edits and a `PHPStan` gate.
-- [`json-lsp`](plugins/json-lsp/README.md): the VS Code JSON language server, with `prettier --write` after edits and a `prettier --check` gate.
-- [`yaml-lsp`](plugins/yaml-lsp/README.md): `yaml-language-server`, with `prettier --write` after edits and a `yamllint` plus `prettier --check` gate.
+- [`typescript-lsp`](plugins/typescript-lsp/README.md): `typescript-language-server`, with an `eslint` check after edits and a `tsc --noEmit` gate.
+- [`rust-lsp`](plugins/rust-lsp/README.md): `rust-analyzer`, with a `rustfmt` parse check after edits and a `cargo clippy` gate.
+- [`python-lsp`](plugins/python-lsp/README.md): `basedpyright`, with a `ruff check` after edits and a `basedpyright` gate.
+- [`shell-lsp`](plugins/shell-lsp/README.md): `bash-language-server`, with a `shellcheck` check after edits and a `shellcheck` gate.
+- [`php-lsp`](plugins/php-lsp/README.md): `intelephense`, with a `php -l` parse check after edits and a `PHPStan` gate.
+- [`json-lsp`](plugins/json-lsp/README.md): the VS Code JSON language server, with a `prettier --check` after edits and over the changed files as a gate.
+- [`yaml-lsp`](plugins/yaml-lsp/README.md): `yaml-language-server`, with a `prettier --check` after edits and a `yamllint` plus `prettier --check` gate.
 
 ## Status
 
@@ -22,7 +22,7 @@ Seven plugins, each at version 1.0.0. The marketplace is MIT-licensed.
 - [What you need installed](#what-you-need-installed)
 - [Install](#install)
 - [What Claude gets from it](#what-claude-gets-from-it)
-- [The auto-heal layer](#the-auto-heal-layer)
+- [The notify layer](#the-notify-layer)
 - [NestJS and Next.js](#nestjs-and-nextjs)
 - [Tuning a large repo](#tuning-a-large-repo)
 - [Adding more language servers](#adding-more-language-servers)
@@ -44,7 +44,7 @@ These plugins tell Claude Code how to reach a language server and which checks t
 
   Keep `typescript` on the 6.x line, at 6.0.3. TypeScript 7 is the native rewrite and it removed `tsserver`, the program `typescript-language-server` drives; its npm `bin` holds `tsc` alone, so installing it leaves you with no language server. The server still targets TypeScript 6 and its own install line asks for `typescript@6`, and it requires Node 22.22.2 or newer.
 
-For the auto-heal hooks:
+For the notify hooks:
 
 - `jq`, which the hooks use to read Claude's JSON from stdin. macOS: `brew install jq`. Debian or Ubuntu: `sudo apt-get install jq`.
 - `node` and `npx`, which the hooks use to call each project's own `eslint` and `tsc` through `npx --no-install`. Any recent Node works.
@@ -65,7 +65,7 @@ rustup component add rust-analyzer rust-src clippy rustfmt
 ```
 
 - `rust-analyzer` is the server. `rust-src` is the standard-library source it reads to resolve `std` symbols; without it, `std` types do not resolve.
-- `clippy` backs both the server's live diagnostics and the gate script. `rustfmt` backs the per-edit format hook.
+- `clippy` backs both the server's live diagnostics and the gate script. `rustfmt` backs the per-edit parse check.
 - `jq` and `git` are needed by the hooks.
 
 Nothing is needed per project. Cargo builds the workspace, so unlike the TypeScript plugin there's no per-project dev dependency to install.
@@ -81,10 +81,10 @@ uv tool install basedpyright
 uv tool install ruff
 ```
 
-- `basedpyright` backs both the language server and the gate script. `ruff` backs the per-edit fix and format.
+- `basedpyright` backs both the language server and the gate script. `ruff` backs the per-edit lint check.
 - `jq` and `git` are needed by the hooks.
 
-Nothing is needed per project to make the type check run. The formatter is narrower: it only fires where a project opted into ruff, meaning a `ruff.toml`, a `.ruff.toml`, or a `[tool.ruff]` section in `pyproject.toml`. Reformatting a repository that standardized on something else would rewrite files it didn't ask to be touched.
+Nothing is needed per project to make the type check run. The per-edit lint check is narrower: it only fires where a project opted into ruff, meaning a `ruff.toml`, a `.ruff.toml`, or a `[tool.ruff]` section in `pyproject.toml`, because lint rules are project-specific and a repo standardized on another tool is left alone. The plugin never reformats anything.
 
 The `pyright` package on PyPI is a wrapper that downloads a Node runtime on first run, which fails on locked-down machines and in offline containers. basedpyright ships real wheels with the server and its runtime bundled, so `uv tool install` is the whole story. To use stock pyright instead, change `command` in `plugins/python-lsp/.lsp.json` to `pyright-langserver`; the settings block works with both.
 
@@ -94,16 +94,16 @@ The server from Bun, the two tools from Homebrew:
 
 ```sh
 bun add -g bash-language-server@5.8.1
-brew install shellcheck shfmt
+brew install shellcheck
 ```
 
 - `bash-language-server` is the server; it shells out to `shellcheck` for diagnostics, so both must be on your `PATH`.
-- `shfmt` backs the per-edit format hook. `shellcheck` also backs the gate script.
+- `shellcheck` backs both the per-edit check and the gate script.
 - `jq` and `git` are needed by the hooks.
 
-On Debian or Ubuntu, `sudo apt-get install shellcheck shfmt`.
+On Debian or Ubuntu, `sudo apt-get install shellcheck`.
 
-The formatter runs on every shell file Claude edits, rather than waiting for an opt-in config, because shell has no equivalent of a `[tool.ruff]` marker. It stays out of your way through `.editorconfig`: `shfmt` reads it, so a repository that declares `indent_style` or `indent_size` for `*.sh` keeps its own style.
+The per-edit check runs `shellcheck` on every shell file Claude edits and reports its findings; it never changes the file. Zsh scripts are not checked at all.
 
 `.zsh` is deliberately unmapped. shellcheck can't parse zsh, so pointing the server at zsh files yields parse errors rather than findings. Zsh scripts are left alone entirely.
 
@@ -113,12 +113,12 @@ The server from Bun, the PHP tools from Composer:
 
 ```sh
 bun add -g intelephense@1.18.5
-composer global require laravel/pint phpstan/phpstan
+composer global require phpstan/phpstan
 ```
 
 - `intelephense` is the server. It needs Node, not PHP.
-- `php` must be on your `PATH` for the parse check. `pint` backs the fallback formatter; a project that ships its own Pint, PHP-CS-Fixer, or PHP_CodeSniffer in `vendor/bin` is used in preference.
-- `phpstan` backs the gate script, again preferring the project's own copy.
+- `php` must be on your `PATH` for the per-edit parse check.
+- `phpstan` backs the gate script, preferring the project's own copy.
 - `jq` and `git` are needed by the hooks.
 
 PHP 8.3 or newer is required.
@@ -138,7 +138,7 @@ bun add -g vscode-langservers-extracted@4.10.0 prettier@3.9.9
 ```
 
 - `vscode-langservers-extracted` ships the VS Code JSON language server as the `vscode-json-language-server` binary. The same package also carries the HTML, CSS, ESLint, and Markdown servers, which this plugin does not use.
-- `prettier` backs the per-edit format and the gate.
+- `prettier` backs both the per-edit check and the gate.
 - `jq` and `git` are needed by the hooks.
 
 The server validates a file against its JSON Schema and ships associations for `package.json`, `tsconfig.json`, `jsconfig.json`, `composer.json`, and `.eslintrc.json`. Unlike the YAML server it does not read the SchemaStore catalog on its own, so add any further association under `settings.json.schemas` in `plugins/json-lsp/.lsp.json`.
@@ -153,7 +153,7 @@ uv tool install yamllint
 ```
 
 - `yaml-language-server` is the server. It reads the SchemaStore catalog by filename, so a GitHub workflow, a Compose file, and a Kubernetes manifest all validate with no setup.
-- `prettier` backs the per-edit format and one half of the gate. `yamllint` backs the other half.
+- `prettier` backs the per-edit check and one half of the gate. `yamllint` backs the other half.
 - `jq` and `git` are needed by the hooks.
 
 Both `.yaml` and `.yml` map to the server. `.yaml` is the extension the YAML project recommends and the one RFC 9512 lists first; `.yml` is shorter, still widely used, and dates from the years when a filename extension was limited to three characters. Both parse identically.
@@ -192,35 +192,35 @@ Claude Code's LSP tool exposes nine read-only operations: go to definition, go t
 
 Two of those operations matter most on Rust. `hover` reports the type the compiler inferred, which is often not written anywhere in the source, because Rust elides most types. `go to implementation` finds every implementor of a trait, which are typically scattered across files that never name the trait.
 
-The LSP can read your code, but it can't change it. Claude Code doesn't expose quick-fix, rename, or format through the language server, which is why the fixing runs through command-line tools instead.
+The LSP can read your code, but it can't change it. Claude Code doesn't expose quick-fix, rename, or format through the language server, and this marketplace adds no fixing of its own: the command-line tools below only check and report, and the fixing stays with Claude.
 
-## The auto-heal layer
+## The notify layer
 
-Each plugin wires three pieces together: the language server for code intelligence, a `PostToolUse` hook that formats or fixes each file as Claude edits it, and a gate script that runs the authoritative whole-project check. A bundled skill teaches Claude how to use them together.
+Each plugin wires three pieces together: the language server for code intelligence, a `PostToolUse` hook that checks each file as Claude edits it and reports the findings into the conversation, and a gate script that runs the authoritative whole-project check. A bundled skill teaches Claude how to use them together. Nothing in the layer fixes, formats, or rewrites anything automatically: it only tells Claude what failed, and Claude decides what to do about it.
 
 Every script is POSIX `sh`, so the same file runs under `sh`, `bash`, `zsh`, `dash`, and BusyBox `sh`. Nothing is duplicated per shell.
 
-The hooks run per file and stay quick. The gate scripts run the whole project, which is slower, and that cost is why they ship unwired.
+The hooks run per file and stay quick, and they stay silent when a file is clean. The gate scripts run the whole project, which is slower, and that cost is why they ship unwired.
 
 ### typescript-lsp
 
-- The skill `ts-autoheal` tells Claude how to work on TS/JS: check references before changing a shared signature, run `eslint --fix` and `tsc --noEmit` after editing, trust `tsc` over the pushed diagnostics when they disagree, and keep going until both are clean.
-- The `PostToolUse` hook runs `eslint --fix` on each TS/JS file Claude writes or edits, then hands any leftover lint back to Claude. It fires only in projects that have an ESLint config, and it is quick because it runs on the single file.
+- The skill `ts-notify` tells Claude how to work on TS/JS: check references before changing a shared signature, run `eslint` and `tsc --noEmit` after editing, trust `tsc` over the pushed diagnostics when they disagree, and keep going until both are clean.
+- The `PostToolUse` hook runs `eslint` on each TS/JS file Claude writes or edits and hands the findings back to Claude; it never modifies the file. It fires only in projects that have an ESLint config, and it is quick because it runs on the single file.
 - The gate script `plugins/typescript-lsp/scripts/ts-gate.sh` runs a full `tsc --noEmit`. It probes `tsc` first and blocks when it cannot run, so a check that never happened is not read as a pass.
 
 ### rust-lsp
 
-- The skill `rust-autoheal` tells Claude how to work on Rust: hover to read inferred types, check implementors before changing a trait, run `cargo clippy` after editing, and fix causes rather than covering them with `.clone()`, `unwrap()`, or `#[allow(...)]`.
-- The `PostToolUse` hook runs `rustfmt` on each `.rs` file Claude writes or edits. It reads the crate's edition out of `Cargo.toml` first and passes it through, which matters: bare `rustfmt` assumes edition 2015 and fails on any file with an `async fn`, leaving it unformatted with nothing to say so. Workspace members that inherit `edition.workspace = true` are handled by walking up to `[workspace.package]`. If `rustfmt` reports an error, the file does not parse, and that error goes back to Claude.
+- The skill `rust-notify` tells Claude how to work on Rust: hover to read inferred types, check implementors before changing a trait, run `cargo clippy` after editing, and fix causes rather than covering them with `.clone()`, `unwrap()`, or `#[allow(...)]`.
+- The `PostToolUse` hook runs `rustfmt --edition <edition> --check` on each `.rs` file Claude writes or edits and reports only when the file does not parse. It reads the crate's edition out of `Cargo.toml` first and passes it through, which matters: bare `rustfmt` assumes edition 2015 and fails on any file with an `async fn`. Workspace members that inherit `edition.workspace = true` are handled by walking up to `[workspace.package]`. Formatting drift is not reported and nothing is reformatted; when the project expects canonical formatting, Claude runs `cargo fmt` itself.
 - The gate script `plugins/rust-lsp/scripts/rust-gate.sh` runs `cargo clippy --workspace --all-targets`. Clippy is a superset of `cargo check`: it does the full type and borrow check plus the lints in one pass, so one invocation covers both jobs. It blocks on errors only and reports the warning count alongside. It also blocks when clippy cannot run for a workspace, so a check that never happened is not read as a pass. To block on warnings too, add `--deny warnings` to the clippy call in the script.
 
 Rust makes it easy to run the same compile several times per edit, so each job has exactly one owner:
 
-- Formatting is `rustfmt`, per file, on edit. Nothing else formats.
+- Parsing is checked by `rustfmt --check`, per file, on edit. Nothing is reformatted.
 - Symbol intelligence is rust-analyzer: hover, definitions, references, implementors. It spawns no build you wait on.
-- The authoritative check is `cargo clippy`, once, at the end of the turn. Nothing else compiles.
+- The authoritative check is `cargo clippy`, once, when you or Claude runs the gate. Nothing else compiles.
 
-If you also run a personal `PostToolUse` hook that formats or checks Rust, remove its Rust branch when you install this plugin, or you get two formatters and an extra full compile on every edit.
+If you also run a personal `PostToolUse` hook that checks or formats Rust, remove its Rust branch when you install this plugin, or you get duplicate checks and an extra full compile on every edit.
 
 rust-analyzer's compiler diagnostics come from `cargo`, and `cargo` re-runs on save. Claude Code writes files without necessarily sending the editor a save notification, so those diagnostics may not refresh after an edit. That's why the bundled skill tells Claude to run clippy itself rather than wait to be told. Turning on `diagnostics.experimental.enable` adds live type-mismatch hints at the cost of false positives; it's off on purpose.
 
@@ -232,8 +232,8 @@ The gate finds its work from the changed files rather than assuming a layout, so
 
 ### python-lsp
 
-- The skill `python-autoheal` tells Claude how to work on Python: hover to read the inferred type rather than trusting an annotation that may be absent or wrong, check references before changing a signature (Python resolves names at runtime, so nothing else catches a missed caller), and fix causes instead of reaching for `# type: ignore`, `Any`, or a `cast()`.
-- The `PostToolUse` hook runs `ruff check --fix` and then `ruff format` on each edited file, in that order, and hands back whatever ruff could not fix. It fires only in projects that opted into ruff.
+- The skill `python-notify` tells Claude how to work on Python: hover to read the inferred type rather than trusting an annotation that may be absent or wrong, check references before changing a signature (Python resolves names at runtime, so nothing else catches a missed caller), and fix causes instead of reaching for `# type: ignore`, `Any`, or a `cast()`.
+- The `PostToolUse` hook runs `ruff check` on each edited file and hands the findings back to Claude; it never modifies the file. It fires only in projects that opted into ruff.
 - The gate script `plugins/python-lsp/scripts/python-gate.sh` runs `basedpyright` across each touched project. Like the Rust gate, it resolves projects from the changed files (`pyproject.toml`, `setup.py`, or `setup.cfg`), so a package nested in a monorepo is covered.
 
 The server runs in `openFilesOnly` mode, so it reports nothing about files Claude has not opened. A change that breaks a caller three modules away stays invisible until the gate runs. That keeps the live path fast and leaves whole-project truth to the gate. It is also the safer choice here: workspace mode has a maintainer-acknowledged bug where it re-analyzes the whole project on every change.
@@ -249,8 +249,8 @@ Four details in this plugin are worth knowing:
 
 ### shell-lsp
 
-- The skill `shell-autoheal` tells Claude how to work on shell: quote every expansion, do not parse `ls`, know what `set -euo pipefail` does not cover, and never cover a finding with a bare `# shellcheck disable=`.
-- The `PostToolUse` hook applies `shellcheck --format=diff` and then runs `shfmt --write`. The fix step is safe to run unattended: shellcheck emits a replacement only where the correction is unambiguous, quoting an expansion or adding `|| exit` after a bare `cd`, and leaves anything requiring judgement untouched.
+- The skill `shell-notify` tells Claude how to work on shell: quote every expansion, do not parse `ls`, know what `set -euo pipefail` does not cover, and never cover a finding with a bare `# shellcheck disable=`.
+- The `PostToolUse` hook runs `shellcheck` on each edited file and hands the error, warning, and info findings back to Claude; it never modifies the file, and it does not format.
 - The gate script `plugins/shell-lsp/scripts/shell-gate.sh` runs `shellcheck` over the changed shell files and reports `error`, `warning`, and `info`. Only `style` is advisory.
 
 That threshold is not the obvious choice. shellcheck's severity tiers do not line up with how dangerous a defect is. `rm -rf $var/`, which wipes the filesystem when the variable is empty, is only a `warning` (SC2115). A `cd` that failed and let the script keep deleting in the wrong directory is also only a `warning` (SC2164). Unquoted expansion, a common real bug in shell, is merely `info` (SC2086). An error-only gate ships all three.
@@ -268,30 +268,25 @@ bash-language-server 5.8.1 is the npm release this plugin pins. It passes `--ext
 
 ### php-lsp
 
-- The skill `php-autoheal` tells Claude how to work on PHP: check references before changing a signature, never run PHPStan without a level, and do not silence findings with `@phpstan-ignore` or by widening a type to `mixed`.
-- The `PostToolUse` hook runs `php -l` first and stops there if the file does not parse, then runs whichever formatter the project configured. The detection order is `pint.json` or `vendor/bin/pint`, then `.php-cs-fixer.php` or `.php-cs-fixer.dist.php`, then `phpcs.xml` or `phpcs.xml.dist` (running `phpcbf`), then Pint's default preset as a fallback. Exactly one runs.
+- The skill `php-notify` tells Claude how to work on PHP: check references before changing a signature, never run PHPStan without a level, and do not silence findings with `@phpstan-ignore` or by widening a type to `mixed`.
+- The `PostToolUse` hook runs `php -l` on each edited file and reports a parse error back to Claude. Nothing else runs: no formatter, no fixer, and the file is never modified.
 - The gate script `plugins/php-lsp/scripts/php-gate.sh` runs PHPStan across every touched project.
 
-Three details are worth knowing:
+Two details are worth knowing:
 
 - PHPStan with no config runs at level 0 and passes. Level 0 catches almost nothing: on a function declared `: int` that returns a string, level 0 reports zero errors and level 5 catches it. So when a project has no `phpstan.neon`, the gate passes `--level=5` explicitly and says so in its output rather than letting a meaningless clean result through.
 - `php -l` exits 255 on a parse error, not 1. A hook checking `-eq 1` would miss every syntax error.
-- Pint ignores `--format` under Claude Code. It emits its own agent-shaped JSON regardless of the format requested, so the hook reads that shape instead of fighting it. `--repair` exits 1 when it changed something and 0 when it did not.
-
-PHP-CS-Fixer is always invoked with `--path-mode=intersection`. Its default, `override`, makes an explicit file path ignore the config's own `Finder`, so a per-file hook would reformat files the project deliberately excluded.
-
-Rector is deliberately absent. It rewrites semantics rather than formatting, needs a project-specific `rector.php` to do anything useful, and its workflow is dry-run, review the diff, run the tests. None of that fits inside a hook that fires after every edit.
 
 ### json-lsp
 
-- The skill `json-autoheal` tells Claude how to work on JSON: read the file's schema before editing, never add a `$schema` key just to get validation, and keep a `.json` file free of comments and trailing commas.
-- The `PostToolUse` hook runs `prettier --write` on each `.json` and `.jsonc` file Claude writes or edits, using the project's own Prettier when it has one.
+- The skill `json-notify` tells Claude how to work on JSON: read the file's schema before editing, never add a `$schema` key just to get validation, and keep a `.json` file free of comments and trailing commas.
+- The `PostToolUse` hook runs `prettier --check` on each `.json` and `.jsonc` file Claude writes or edits and reports what it finds, using the project's own Prettier when it has one. It never writes.
 - The gate script `plugins/json-lsp/scripts/json-gate.sh` runs `prettier --check` over the changed files. It fails on a file that does not parse and on one that is not canonically formatted, so one command covers both.
 
 ### yaml-lsp
 
-- The skill `yaml-autoheal` tells Claude how to work on YAML: quote a value that could be read as another type, keep to two-space indentation, and never keep a `.yaml` and a `.yml` for the same file.
-- The `PostToolUse` hook runs `prettier --write` on each `.yaml` and `.yml` file Claude writes or edits.
+- The skill `yaml-notify` tells Claude how to work on YAML: quote a value that could be read as another type, keep to two-space indentation, and never keep a `.yaml` and a `.yml` for the same file.
+- The `PostToolUse` hook runs `prettier --check` on each `.yaml` and `.yml` file Claude writes or edits and reports what it finds. It never writes.
 - The gate script `plugins/yaml-lsp/scripts/yaml-gate.sh` runs `yamllint` and then `prettier --check` over the changed files. yamllint uses the project's own `.yamllint` when it has one, and otherwise a Prettier-compatible default, because the stock rules want two spaces before an inline comment and a `---` document start, and Prettier writes neither. A yamllint that fails to run blocks rather than reading as clean.
 
 ### The gates are not wired up

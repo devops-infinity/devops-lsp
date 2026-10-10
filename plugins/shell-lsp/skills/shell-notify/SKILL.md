@@ -1,11 +1,11 @@
 ---
-name: shell-autoheal
-description: Auto-heal shell scripts after edits. Use when editing, refactoring, or reviewing .sh, .bash, or .bats files, when shellcheck or shfmt reports problems, or when asked to fix, clean up, format, or lint a bash or POSIX shell script.
+name: shell-notify
+description: Work on shell scripts with the language server and the project's own checks. Use when editing, refactoring, or reviewing .sh, .bash, or .bats files, when shellcheck reports problems, or when asked to fix, lint, or check a bash or POSIX shell script.
 ---
 
-# Shell auto-heal
+# Shell notify
 
-You have a shell language server (bash-language-server), and it's read-only. It can look things up (goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, and completion), and it surfaces shellcheck diagnostics for open files. It does not provide implementations or call hierarchy, because shell has no such structure. What it can't do is change code. You do the fixing with the command-line tools below.
+You have a shell language server (bash-language-server), and it's read-only. It can look things up (goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, and completion), and it surfaces shellcheck diagnostics for open files. It does not provide implementations or call hierarchy, because shell has no such structure. What it can't do is change code. Nothing fixes anything for you. The checks report the failures, and the fixing is yours.
 
 ## Before you edit
 
@@ -13,11 +13,10 @@ You have a shell language server (bash-language-server), and it's read-only. It 
 - Use goToDefinition on a function to find where it's defined; in a large script the definition is often far from the call.
 - Before you rename or change a function's arguments, run findReferences. Shell has no compiler, so a missed call site fails at runtime, usually in production.
 
-## After you edit, fix it: don't just report it
+## After you edit
 
-- Formatting is already handled. A PostToolUse hook runs `shfmt --write` on each file you edit, and it honors the project's `.editorconfig`, so indentation follows the repo rather than a default.
-- Run `shellcheck <file>` for the real check. It catches quoting bugs, unset-variable hazards, and misuse that no formatter sees.
-- Fix by severity: `error` first (those break the script), then `warning`, then `info`. The gate reports all three, because warnings are usually genuine bugs waiting for the wrong input.
+- A PostToolUse hook runs `shellcheck` on each file you edit and reports its error, warning, and info findings back to you. It never modifies the file, so fix what it reports with your own edits. It does not format: when the project expects it, run `shfmt` yourself, and note that `shfmt` reads `.editorconfig`, so a repository that declares `indent_style` or `indent_size` for `*.sh` keeps its own style.
+- Fix by severity: `error` first (those break the script), then `warning`, then `info`. All three are reported, because warnings are usually genuine bugs waiting for the wrong input.
 
 ## The bugs that actually bite
 

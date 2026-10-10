@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "yaml-lsp",
-  "displayName": "YAML LSP + Auto-Heal",
-  "description": "YAML intelligence for Claude Code, backed by the Red Hat YAML language server, with an auto-heal layer on top: Prettier formats each edited file, and a yamllint check script verifies the whole project. A bundled skill shows Claude how to use them together.",
+  "displayName": "YAML LSP",
+  "description": "YAML intelligence for Claude Code, backed by the Red Hat YAML language server, with a notify-only layer on top: after each edit a hook runs prettier --check on the file and reports what it finds, and a yamllint plus prettier --check script covers the changed files. Nothing is fixed or formatted automatically. A bundled skill shows Claude how to use them together.",
   "version": "1.0.0",
   "author": {
     "name": "DevOps",
@@ -19,8 +19,7 @@
     "json-schema",
     "yamllint",
     "prettier",
-    "auto-fix",
-    "auto-heal",
+    "notify",
     "diagnostics",
     "code-intelligence"
   ],

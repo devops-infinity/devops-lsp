@@ -2,7 +2,7 @@
 
 Rust support for Claude Code, part of the `devops-lsp` marketplace.
 
-It runs `rust-analyzer` for code intelligence and adds an auto-heal layer: `rustfmt` after edits, and a `cargo clippy` gate script the bundled skill runs over the whole workspace.
+It runs `rust-analyzer` for code intelligence and adds a notify-only layer: a `rustfmt` parse check after each edit reports a syntax error without changing the file, and a `cargo clippy` gate script the bundled skill runs over the whole workspace. Nothing is ever fixed or formatted automatically.
 
 Install the tools, then the plugin:
 

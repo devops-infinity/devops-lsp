@@ -1,11 +1,11 @@
 ---
-name: json-autoheal
-description: Auto-heal JSON and JSONC files after edits. Use when editing, refactoring, or reviewing .json or .jsonc files, when the JSON language server reports a schema or syntax problem, or when asked to fix, clean up, or format JSON.
+name: json-notify
+description: Work on JSON and JSONC files with the language server and the project's own checks. Use when editing, refactoring, or reviewing .json or .jsonc files, when the JSON language server reports a schema or syntax problem, or when asked to fix or check JSON.
 ---
 
-# JSON auto-heal
+# JSON notify
 
-You have a JSON language server (vscode-json-language-server), and it is read-only. It validates syntax, checks a file against its JSON Schema, completes properties, and reports document symbols. It does not change code. The fixing runs through the command-line tools below.
+You have a JSON language server (vscode-json-language-server), and it is read-only. It validates syntax, checks a file against its JSON Schema, completes properties, and reports document symbols. It does not change code. Nothing fixes anything for you. The checks report the failures, and the fixing is yours.
 
 ## Before you edit
 
@@ -13,10 +13,9 @@ You have a JSON language server (vscode-json-language-server), and it is read-on
 - Check the file's schema first. A `$schema` key in the file, or a match in the server's schema list, decides which schema validates it. `package.json`, `tsconfig.json`, `jsconfig.json`, `composer.json`, and `.eslintrc.json` are associated already.
 - Never add a `$schema` key just to get validation. It changes the file, and the program that reads the JSON may reject the unknown key. Add the association in the plugin's `.lsp.json` settings instead.
 
-## After you edit, fix it
+## After you edit
 
-- Formatting is already handled. A PostToolUse hook runs `prettier --write` on each `.json` and `.jsonc` file you edit, using the project's own Prettier when it has one. Prettier reads `.editorconfig`, so indentation follows the repository.
-- Run `prettier --check <files>` for the real check. It fails on a file that does not parse and on a file that is not canonically formatted, so one command covers both.
+- A PostToolUse hook runs `prettier --check` on each `.json` and `.jsonc` file you edit and reports what it finds: a parse failure, or formatting drift. It never writes, so fix the file yourself, and format it yourself with the project's Prettier when the project expects it. Prettier reads `.editorconfig`, so indentation follows the repository.
 - Validate against the schema when the file has one. The language server reports a schema violation as a diagnostic; a syntax error and a schema error are different problems and need different fixes.
 
 ## The details that bite

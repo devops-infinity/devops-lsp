@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "json-lsp",
-  "displayName": "JSON LSP + Auto-Heal",
-  "description": "JSON and JSONC intelligence for Claude Code, backed by the VS Code JSON language server, with an auto-heal layer on top: Prettier formats each edited file, and a check script verifies the whole project. A bundled skill shows Claude how to use them together.",
+  "displayName": "JSON LSP",
+  "description": "JSON and JSONC intelligence for Claude Code, backed by the VS Code JSON language server, with a notify-only layer on top: after each edit a hook runs prettier --check on the file and reports what it finds, and a check script covers the changed files. Nothing is fixed or formatted automatically. A bundled skill shows Claude how to use them together.",
   "version": "1.0.0",
   "author": {
     "name": "DevOps",
@@ -18,8 +18,7 @@
     "schema",
     "json-schema",
     "prettier",
-    "auto-fix",
-    "auto-heal",
+    "notify",
     "diagnostics",
     "code-intelligence"
   ],

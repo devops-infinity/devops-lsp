@@ -9,13 +9,11 @@
     "startupTimeout": 60000,
     "maxRestarts": 3,
     "initializationOptions": {
-      "provideFormatter": true,
       "handledSchemaProtocols": ["file", "http", "https"]
     },
     "settings": {
       "json": {
         "validate": { "enable": true },
-        "format": { "enable": true },
         "schemas": [
           {
             "fileMatch": ["package.json"],

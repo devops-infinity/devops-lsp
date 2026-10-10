@@ -18,18 +18,7 @@
         "enableSourceErrorDiagnostics": false,
         "includeAllWorkspaceSymbols": false,
         "backgroundAnalysisMaxFiles": 0,
-        "logLevel": "warning",
-        "shfmt": {
-          "path": "shfmt",
-          "languageDialect": "auto",
-          "ignoreEditorconfig": false,
-          "simplifyCode": false,
-          "caseIndent": false,
-          "binaryNextLine": false,
-          "funcNextLine": false,
-          "keepPadding": false,
-          "spaceRedirects": false
-        }
+        "logLevel": "warning"
       }
     }
   }

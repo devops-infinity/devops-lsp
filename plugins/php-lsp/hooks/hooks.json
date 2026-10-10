@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/php-autoheal.sh",
-            "timeout": 60
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/php-notify.sh",
+            "timeout": 30
           }
         ]
       }

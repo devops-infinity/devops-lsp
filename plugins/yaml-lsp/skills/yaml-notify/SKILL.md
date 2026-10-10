@@ -1,11 +1,11 @@
 ---
-name: yaml-autoheal
-description: Auto-heal YAML files after edits. Use when editing, refactoring, or reviewing .yaml or .yml files, when the YAML language server reports a schema or syntax problem, or when asked to fix, clean up, or lint a YAML file, a Kubernetes manifest, a CI workflow, or a Docker Compose file.
+name: yaml-notify
+description: Work on YAML files with the language server and the project's own checks. Use when editing, refactoring, or reviewing .yaml or .yml files, when the YAML language server reports a schema or syntax problem, or when asked to fix or check a YAML file, a Kubernetes manifest, a CI workflow, or a Docker Compose file.
 ---
 
-# YAML auto-heal
+# YAML notify
 
-You have a YAML language server (yaml-language-server), and it is read-only. It validates syntax, validates a file against its JSON Schema, completes properties, and reports document symbols. It does not change code. The fixing runs through the command-line tools below.
+You have a YAML language server (yaml-language-server), and it is read-only. It validates syntax, validates a file against its JSON Schema, completes properties, and reports document symbols. It does not change code. Nothing fixes anything for you. The checks report the failures, and the fixing is yours.
 
 ## Before you edit
 
@@ -14,12 +14,11 @@ You have a YAML language server (yaml-language-server), and it is read-only. It 
 - Set `yaml.schemas` in the plugin's `.lsp.json` when a project file has no schema and no filename SchemaStore knows. Do not add a `$schema` key to the file to get validation; it changes the document.
 - A modeline at the top of the file is the per-file override, and it is the one association that wins over everything else: `# yaml-language-server: $schema=<url>`.
 
-## After you edit, fix it
+## After you edit
 
-- Formatting is already handled. A PostToolUse hook runs `prettier --write` on each `.yaml` and `.yml` file you edit, using the project's own Prettier when it has one. Prettier reads `.editorconfig`, so indentation follows the repository.
+- A PostToolUse hook runs `prettier --check` on each `.yaml` and `.yml` file you edit and reports what it finds: a parse failure, or formatting drift. It never writes, so fix the file yourself, and format it yourself with the project's Prettier when the project expects it. Prettier reads `.editorconfig`, so indentation follows the repository.
 - Run `yamllint <files>` for the real check. It catches a duplicate key, a bad indentation, a trailing space, and a truthy value that will change type.
-- Run `prettier --check <files>` to confirm the file is canonically formatted.
-- Prettier and yamllint disagree by default. Prettier writes one space before an inline comment, pads a flow mapping as `{ a: 1 }`, and never adds a `---` start; yamllint's stock rules want the opposite on all three and would flag every file Prettier writes. The gate therefore passes yamllint a Prettier-compatible default, and uses the project's own `.yamllint` when it has one.
+- Prettier and yamllint disagree by default. Prettier writes one space before an inline comment, pads a flow mapping as `{ a: 1 }`, and never adds a `---` start; yamllint's stock rules want the opposite on all three and would flag every file Prettier writes. The check script therefore passes yamllint a Prettier-compatible default, and uses the project's own `.yamllint` when it has one.
 
 ## The details that bite
 

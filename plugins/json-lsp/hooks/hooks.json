@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/json-autoheal.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/json-notify.sh",
             "timeout": 30
           }
         ]

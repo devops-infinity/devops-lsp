@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "python-lsp",
-  "displayName": "Python LSP + Auto-Heal",
-  "description": "Python intelligence for Claude Code, backed by basedpyright, with an auto-heal layer on top: it runs ruff check --fix and ruff format after each edit and ships a basedpyright check script. A bundled skill shows Claude how to use them together.",
+  "displayName": "Python LSP",
+  "description": "Python intelligence for Claude Code, backed by basedpyright, with a notify-only layer on top: after each edit a hook runs ruff check on the file and reports the findings, and a basedpyright check script covers the whole project. Nothing is fixed or formatted automatically. A bundled skill shows Claude how to use them together.",
   "version": "1.0.0",
   "author": {
     "name": "DevOps",
@@ -18,8 +18,7 @@
     "pyright",
     "ruff",
     "type-check",
-    "auto-fix",
-    "auto-heal",
+    "notify",
     "diagnostics",
     "code-intelligence"
   ],

@@ -1,118 +1,137 @@
 #!/bin/sh
+# Whole-project PHPStan gate: block with the errors it reports; a run that cannot happen is never read as a pass.
 set -u
 
-nl='
+newline='
 '
 
 command -v jq >/dev/null 2>&1 || exit 0
 command -v git >/dev/null 2>&1 || exit 0
 
-input="$(cat)"
-active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null || echo false)"
-[ "$active" = "true" ] && exit 0
+if [ -t 0 ]; then
+	printf 'usage: echo ...hook JSON... | %s\n' "$0" >&2
+	exit 0
+fi
 
-root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+block_with_reason() {
+	jq -n --arg reason "$1" '{decision: "block", reason: $reason}'
+}
 
-list="$(mktemp)"
-errfile="$(mktemp)"
-trap 'rm -f "$list" "$errfile"' EXIT
-(cd "$root" && {
-	git diff --name-only -z
-	git diff --name-only --cached -z
-	git ls-files --others --exclude-standard -z
-} 2>/dev/null) | tr '\0' '\n' >"$list"
+hook_input="$(cat)"
+stop_hook_active="$(printf '%s' "$hook_input" | jq -r '.stop_hook_active // false' 2>/dev/null || echo false)"
+[ "$stop_hook_active" = "true" ] && exit 0
 
-changed=""
-while IFS= read -r rel; do
-	[ -n "$rel" ] || continue
-	[ -f "$root/$rel" ] || continue
-	case "$rel" in
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+git_nul_file="$(mktemp)" || exit 0
+scratch_file="$(mktemp)" || exit 0
+stderr_file="$(mktemp)" || exit 0
+trap 'rm -f "$git_nul_file" "$scratch_file" "$stderr_file"' EXIT HUP INT TERM
+
+if ! (cd "$repo_root" && {
+	git diff --name-only -z || exit 1
+	git diff --name-only --cached -z || exit 1
+	git ls-files --others --exclude-standard -z || exit 1
+} 2>/dev/null) >"$git_nul_file"; then
+	block_with_reason "devops-lsp PHP gate: git could not list the changed files, so the check did not happen. Treat this as unverified, not clean."
+	exit 0
+fi
+# POSIX sh has no NUL-safe string handling; filenames containing a newline are outside this line protocol
+tr '\0' '\n' <"$git_nul_file" >"$scratch_file"
+
+changed_files=""
+while IFS= read -r rel_path; do
+	[ -n "$rel_path" ] || continue
+	[ -f "$repo_root/$rel_path" ] || continue
+	case "$rel_path" in
 	*.php | *.phtml)
-		case "$rel" in
+		case "$rel_path" in
 		*.blade.php) continue ;;
 		esac
-		changed="${changed}${rel}${nl}"
+		changed_files="${changed_files}${rel_path}${newline}"
 		;;
 	esac
-done <"$list"
-[ -n "$changed" ] || exit 0
+done <"$scratch_file"
+[ -n "$changed_files" ] || exit 0
 
-printf '%s' "$changed" >"$list"
-projects="$(while IFS= read -r rel; do
-	[ -n "$rel" ] || continue
-	dir="$root/$(dirname -- "$rel")"
-	[ -d "$dir" ] || continue
-	probe="$(cd "$dir" && pwd)"
-	while [ -n "$probe" ] && [ "$probe" != "/" ]; do
-		if [ -f "$probe/composer.json" ]; then
-			printf '%s\n' "$probe"
+printf '%s' "$changed_files" >"$scratch_file"
+project_dirs="$(while IFS= read -r rel_path; do
+	[ -n "$rel_path" ] || continue
+	file_dir="$repo_root/$(dirname -- "$rel_path")"
+	[ -d "$file_dir" ] || continue
+	walk_dir="$(cd "$file_dir" && pwd)"
+	while [ -n "$walk_dir" ] && [ "$walk_dir" != "/" ]; do
+		if [ -f "$walk_dir/composer.json" ]; then
+			printf '%s\n' "$walk_dir"
 			break
 		fi
-		probe="$(dirname -- "$probe")"
+		walk_dir="$(dirname -- "$walk_dir")"
 	done
-done <"$list" | sort -u)"
-[ -n "$projects" ] || exit 0
+done <"$scratch_file" | sort -u)"
+[ -n "$project_dirs" ] || exit 0
 
-errors=""
-broken=""
-printf '%s' "$projects" >"$list"
-while IFS= read -r proj; do
-	[ -n "$proj" ] || continue
+error_lines=""
+unverified=""
+# the trailing newline matters: command substitution strips it, and a final unterminated line is dropped by read
+printf '%s\n' "$project_dirs" >"$scratch_file"
+while IFS= read -r project_dir; do
+	[ -n "$project_dir" ] || continue
 
-	phpstan=""
-	if [ -x "$proj/vendor/bin/phpstan" ]; then
-		phpstan="$proj/vendor/bin/phpstan"
+	phpstan_bin=""
+	if [ -x "$project_dir/vendor/bin/phpstan" ]; then
+		phpstan_bin="$project_dir/vendor/bin/phpstan"
 	elif command -v phpstan >/dev/null 2>&1; then
-		phpstan="$(command -v phpstan)"
+		phpstan_bin="$(command -v phpstan)"
 	fi
-	[ -n "$phpstan" ] || continue
+	[ -n "$phpstan_bin" ] || continue
 
-	level_note=""
-	if [ -f "$proj/phpstan.neon" ] || [ -f "$proj/phpstan.neon.dist" ] || [ -f "$proj/phpstan.dist.neon" ]; then
-		out="$(cd "$proj" && "$phpstan" analyse --error-format=json --no-progress --no-interaction --memory-limit=2G 2>"$errfile")"
+	level_suffix=""
+	if [ -f "$project_dir/phpstan.neon" ] || [ -f "$project_dir/phpstan.neon.dist" ] || [ -f "$project_dir/phpstan.dist.neon" ]; then
+		phpstan_json="$(cd "$project_dir" && "$phpstan_bin" analyse --error-format=json --no-progress --no-interaction --memory-limit=2G </dev/null 2>"$stderr_file")"
+		phpstan_exit=$?
 	else
-		out="$(cd "$proj" && "$phpstan" analyse --level=5 --error-format=json --no-progress --no-interaction --memory-limit=2G . 2>"$errfile")"
-		level_note=" (no phpstan.neon found, ran at level 5)"
+		phpstan_json="$(cd "$project_dir" && "$phpstan_bin" analyse --level=5 --error-format=json --no-progress --no-interaction --memory-limit=2G . </dev/null 2>"$stderr_file")"
+		phpstan_exit=$?
+		level_suffix=" (no phpstan.neon found, ran at level 5)"
 	fi
-	rc=$?
-	err="$(cat "$errfile" 2>/dev/null || true)"
-	: >"$errfile"
+	stderr_text="$(cat "$stderr_file" 2>/dev/null || true)"
+	: >"$stderr_file"
 
 	# PHPStan exits 1 for findings and for a setup failure alike, so the JSON decides
-	if ! printf '%s' "$out" | jq -e 'has("totals")' >/dev/null 2>&1; then
-		broken="${broken}- ${proj}: PHPStan exited ${rc} without a usable report${nl}"
-		[ -n "$err" ] && broken="${broken}  $(printf '%s' "$err" | head -n1)${nl}"
+	if ! printf '%s' "$phpstan_json" | jq -e 'has("totals")' >/dev/null 2>&1; then
+		unverified="${unverified}- ${project_dir}: PHPStan exited ${phpstan_exit} without a usable report${newline}"
+		[ -n "$stderr_text" ] && unverified="${unverified}  $(printf '%s' "$stderr_text" | head -n1)${newline}"
 		continue
 	fi
 
-	found="$(printf '%s' "$out" | jq -r '
-    (.files // {}) | to_entries[]
-    | .key as $f
-    | (.value.messages // [])[]
-    | "\($f):\(.line // 0): \(.message)"
+	file_findings="$(printf '%s' "$phpstan_json" | jq -r '
+	(.files // {}) | to_entries[]
+	| .key as $file
+	| (.value.messages // [])[]
+	| "\($file):\(.line // 0): \(.message)"
   ' 2>/dev/null || true)"
-	general="$(printf '%s' "$out" | jq -r '(.errors // [])[]' 2>/dev/null || true)"
+	top_level_errors="$(printf '%s' "$phpstan_json" | jq -r '(.errors // [])[]' 2>/dev/null || true)"
 
-	[ -n "$found" ] && errors="${errors}${found}${level_note}${nl}"
-	[ -n "$general" ] && errors="${errors}${general}${nl}"
-done <"$list"
+	[ -n "$file_findings" ] && error_lines="${error_lines}${file_findings}${level_suffix}${newline}"
+	[ -n "$top_level_errors" ] && error_lines="${error_lines}${top_level_errors}${newline}"
+done <"$scratch_file"
 
-errors="$(printf '%s' "$errors" | grep -v '^$' | awk '!seen[$0]++' || true)"
+error_lines="$(printf '%s' "$error_lines" | grep -v '^$' | awk '!seen[$0]++' || true)"
 
-if [ -z "$errors" ] && [ -z "$broken" ]; then
+if [ -z "$error_lines" ] && [ -z "$unverified" ]; then
 	exit 0
 fi
 
 reason="devops-lsp PHP gate:"
-if [ -n "$broken" ]; then
-	reason="${reason}${nl}The check did not complete for some projects. Treat these as unverified, not clean:${nl}${broken}"
+if [ -n "$unverified" ]; then
+	reason="${reason}${newline}The check did not complete for some projects. Treat these as unverified, not clean:${newline}${unverified}"
 fi
-if [ -n "$errors" ]; then
-	total="$(printf '%s\n' "$errors" | wc -l | tr -d ' ')"
-	shown="$(printf '%s\n' "$errors" | head -40)"
-	[ "$total" -gt 40 ] && shown="${shown}${nl}... $((total - 40)) more"
-	reason="${reason}${nl}PHPStan reported ${total} error(s). Fix them before finishing:${nl}${shown}"
+if [ -n "$error_lines" ]; then
+	error_total="$(printf '%s\n' "$error_lines" | wc -l | tr -d ' ')"
+	shown_errors="$(printf '%s\n' "$error_lines" | head -n 40)"
+	[ "$error_total" -gt 40 ] && shown_errors="${shown_errors}${newline}... $((error_total - 40)) more"
+	reason="${reason}${newline}PHPStan reported ${error_total} error(s). Fix them before finishing:${newline}${shown_errors}"
 fi
 
-jq -n --arg r "$reason" '{decision: "block", reason: $r}'
+block_with_reason "$reason"
 exit 0

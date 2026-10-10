@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/python-autoheal.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/python-notify.sh",
             "timeout": 30
           }
         ]

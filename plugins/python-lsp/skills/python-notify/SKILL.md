@@ -1,11 +1,11 @@
 ---
-name: python-autoheal
-description: Auto-heal Python after edits. Use when editing, refactoring, or reviewing .py or .pyi files, when type errors, import errors, or lint failures show up, or when asked to fix, clean up, format, or type-check Python.
+name: python-notify
+description: Work on Python with the language server and the project's own checks. Use when editing, refactoring, or reviewing .py or .pyi files, when type errors, import errors, or lint failures show up, or when asked to fix, lint, or type-check Python.
 ---
 
-# Python auto-heal
+# Python notify
 
-You have a Python language server (basedpyright), and it's read-only. It can look things up (goToDefinition, goToImplementation, findReferences, hover, documentSymbol, workspaceSymbol, and call hierarchy), and it reports type errors for the files you have open. What it can't do is change code: no quick fixes, no rename, no organize-imports, no formatting. You do the fixing with the command-line tools below.
+You have a Python language server (basedpyright), and it's read-only. It can look things up (goToDefinition, goToImplementation, findReferences, hover, documentSymbol, workspaceSymbol, and call hierarchy), and it reports type errors for the files you have open. What it can't do is change code: no quick fixes, no rename, no organize-imports, no formatting. Nothing fixes anything for you. The checks report the failures, and the fixing is yours.
 
 The server is set to `openFilesOnly`, so it says nothing about files you haven't touched. A change that breaks a caller three modules away will not show up until you check the project. Run the check yourself rather than waiting to be told.
 
@@ -15,9 +15,9 @@ The server is set to `openFilesOnly`, so it says nothing about files you haven't
 - Use goToDefinition to read a class or function instead of guessing its shape from how it's called.
 - Before you change a function signature, a class attribute, or anything exported from a module, run findReferences. Python resolves names at runtime, so the compiler will not catch a caller you forgot.
 
-## After you edit, fix it: don't just report it
+## After you edit
 
-- Lint and formatting are already handled. A PostToolUse hook runs `ruff check --fix` and then `ruff format` on each file you edit, and hands back whatever ruff could not fix. It only fires in projects that opted into ruff.
+- A PostToolUse hook runs `ruff check` on each file you edit and reports the findings back to you. It never modifies the file, so fix what it reports with your own edits. It fires only in projects that opted into ruff, and it does not format: when the project expects it, run `ruff format` yourself.
 - Run `basedpyright` for the real check. It covers the whole project, not just the open files that `openFilesOnly` mode reports on.
 - For each error, follow the types back with hover and goToDefinition to where the mismatch starts, fix it there, and run the check again.
 

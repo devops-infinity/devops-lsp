@@ -2,7 +2,7 @@
 
 JSON and JSONC support for Claude Code, part of the `devops-lsp` marketplace.
 
-It runs the VS Code JSON language server for code intelligence and adds an auto-heal layer: `prettier --write` after edits, and a `prettier --check` gate script the bundled skill runs over the changed files.
+It runs the VS Code JSON language server for code intelligence and adds a notify-only layer: `prettier --check` after each edit reports what it finds without changing the file, and the same check as a gate script the bundled skill runs over the changed files. Nothing is ever fixed or formatted automatically.
 
 Install the tools, then the plugin:
 

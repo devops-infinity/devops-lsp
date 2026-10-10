@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "rust-lsp",
-  "displayName": "Rust LSP + Auto-Heal",
-  "description": "Rust intelligence for Claude Code, backed by rust-analyzer, with an auto-heal layer on top: it runs rustfmt after each edit and ships a cargo clippy check script. A bundled skill shows Claude how to use them together.",
+  "displayName": "Rust LSP",
+  "description": "Rust intelligence for Claude Code, backed by rust-analyzer, with a notify-only layer on top: after each edit a hook checks that the file parses and reports an error, and a cargo clippy check script covers the whole workspace. Nothing is fixed or formatted automatically. A bundled skill shows Claude how to use them together.",
   "version": "1.0.0",
   "author": {
     "name": "DevOps",
@@ -19,8 +19,7 @@
     "clippy",
     "rustfmt",
     "type-check",
-    "auto-fix",
-    "auto-heal",
+    "notify",
     "diagnostics",
     "code-intelligence"
   ],
